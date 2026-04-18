@@ -34,6 +34,7 @@ import { jobsForSite } from "../fleet";
 type StatusFilter = "all" | SiteStatus | "stale" | "updates";
 type SortKey = "name" | "health" | "heartbeat" | "updates" | "visits";
 type SortDir = "asc" | "desc";
+const PAGE_SIZE = 4;
 
 const statusCfg: Record<SiteStatus, { label: string; dot: string; tone: string }> = {
   online: { label: "Online", dot: "bg-emerald-500", tone: "text-emerald-600 dark:text-emerald-400" },
@@ -54,6 +55,7 @@ export default function SitesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [addOpen, setAddOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -90,6 +92,8 @@ export default function SitesPage() {
   };
 
   const selectedIds = Object.keys(selected).filter((k) => selected[k]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const allSelected = filtered.length > 0 && filtered.every((s) => selected[s.id]);
   const toggleAll = () => {
     if (allSelected) setSelected({});
@@ -202,15 +206,18 @@ export default function SitesPage() {
               <SortTh label="Heartbeat" active={sortKey === "heartbeat"} dir={sortDir} onClick={() => toggleSort("heartbeat")} />
               <SortTh label="Health" active={sortKey === "health"} dir={sortDir} onClick={() => toggleSort("health")} />
               <SortTh label="Updates" active={sortKey === "updates"} dir={sortDir} onClick={() => toggleSort("updates")} />
+              <Th>Lagring</Th>
+              <Th>SSL</Th>
               <Th>Jobs</Th>
               <SortTh label="Visits 30d" active={sortKey === "visits"} dir={sortDir} onClick={() => toggleSort("visits")} />
               <th className="w-10 border-b px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s) => {
+            {paged.map((s) => {
               const cfg = statusCfg[s.status];
               const jobsCount = jobsForSite(s.id).length;
+              const storagePct = Math.round((s.storageGB / s.storageLimitGB) * 100);
               return (
                 <tr key={s.id} className={clsx("group transition-colors hover:bg-bg/60", selected[s.id] && "bg-bg")}>
                   <td className="border-b border-border/60 px-4 py-3">
@@ -261,6 +268,18 @@ export default function SitesPage() {
                     </div>
                   </td>
                   <td className="border-b border-border/60 px-4 py-3">
+                    <div className="text-[12px] font-medium tabular-nums">{s.storageGB}/{s.storageLimitGB} GB</div>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-fg/5">
+                      <div className={clsx("h-full", storagePct > 85 ? "bg-amber-500" : "bg-fg/60")} style={{ width: `${storagePct}%` }} />
+                    </div>
+                  </td>
+                  <td className="border-b border-border/60 px-4 py-3">
+                    <div className={clsx("text-[12px] font-medium", s.sslDays < 30 && "text-amber-600 dark:text-amber-400")}>
+                      {s.sslDays} dagar
+                    </div>
+                    <div className="text-[11px] text-muted">auto-renew</div>
+                  </td>
+                  <td className="border-b border-border/60 px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {s.failingJobs > 0 && <Badge tone="danger">{s.failingJobs} failed</Badge>}
                       {s.pendingJobs > 0 && <Badge tone="neutral">{s.pendingJobs} pending</Badge>}
@@ -284,6 +303,22 @@ export default function SitesPage() {
           <div className="p-10 text-center text-sm text-muted">Inga sajter matchade filtret.</div>
         )}
       </div>
+
+      {filtered.length > 0 && (
+        <Card className="flex items-center justify-between p-3 px-4">
+          <span className="text-sm text-muted">
+            Sida {page} av {totalPages} · visar {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} av {filtered.length}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+              Föregående
+            </Button>
+            <Button variant="secondary" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+              Nästa
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <AddSiteDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>

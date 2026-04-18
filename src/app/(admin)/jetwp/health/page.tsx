@@ -26,6 +26,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { useToast } from "@/components/toast/ToastProvider";
 import { sites } from "../data";
+import { nodeThresholdAlerts } from "../extended-data";
 
 type NodeStatus = "healthy" | "warning" | "critical";
 
@@ -211,6 +212,34 @@ export default function HealthPage() {
             <span className="rounded border px-2 py-0.5 font-mono text-[11px] tabular-nums">2 148/s</span>
           </div>
           <AreaChart data={requestHistory} height={180} />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-semibold tracking-tight">Node threshold rules</h2>
+            <p className="mt-0.5 text-xs text-muted">Automatiska alerts nar noder passerar kritiska gransvarden.</p>
+          </div>
+          <div className="space-y-2">
+            {nodeThresholdAlerts.map((rule) => (
+              <div key={`${rule.node}-${rule.metric}`} className="rounded-lg border bg-bg px-3 py-2.5 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{rule.node} · {rule.metric}</span>
+                  <span className="font-mono text-[11px] text-muted">{rule.threshold}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted">{rule.action}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-semibold tracking-tight">Historical node trend</h2>
+            <p className="mt-0.5 text-xs text-muted">30-min average load for the warmest node.</p>
+          </div>
+          <AreaChart data={cpuHistory.map((point, index) => ({ label: point.label, value: Math.max(24, point.value - (index % 5) * 3) }))} height={180} formatValue={(value) => `${value}%`} />
         </Card>
       </div>
 

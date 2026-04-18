@@ -39,7 +39,7 @@ type Range = keyof typeof ranges;
 
 export function RevenueCard() {
   const [range, setRange] = useState<Range>("30d");
-  const data = ranges[range].data;
+  const data = [...ranges[range].data];
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (

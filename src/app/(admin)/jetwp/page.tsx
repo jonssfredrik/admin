@@ -25,9 +25,11 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Table";
+import { AreaChart } from "@/components/charts/AreaChart";
 import { useToast } from "@/components/toast/ToastProvider";
 import { sites } from "./data";
 import { jobs, alerts, pluginInventory, themeInventory, coreInventory } from "./fleet";
+import { fleetHealthTrend, fleetRegions } from "./extended-data";
 
 export default function JetWPOverviewPage() {
   const toast = useToast();
@@ -150,6 +152,50 @@ export default function JetWPOverviewPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">Health over tid</h2>
+              <p className="mt-0.5 text-xs text-muted">Dagligt fleet-index senaste 14 dagarna</p>
+            </div>
+            <span className="rounded border px-2 py-0.5 font-mono text-[11px] tabular-nums">
+              {fleetHealthTrend.at(-1)?.value ?? 0}/100
+            </span>
+          </div>
+          <AreaChart data={fleetHealthTrend} height={180} formatValue={(value) => `${value}/100`} />
+        </Card>
+
+        <Card className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">Regionvy</h2>
+              <p className="mt-0.5 text-xs text-muted">Var sajterna ligger och hur lasten ser ut</p>
+            </div>
+            <span className="text-xs text-muted">{fleetRegions.length} regioner</span>
+          </div>
+          <div className="space-y-3">
+            {fleetRegions.map((region) => (
+              <div key={region.name} className="rounded-xl border bg-bg/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">{region.name}</div>
+                    <div className="text-[11px] text-muted">{region.sites} sajter</div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <Badge tone="success">{region.healthy} healthy</Badge>
+                    <Badge tone={region.warning > 0 ? "warning" : "neutral"}>{region.warning} warning</Badge>
+                  </div>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-fg/5">
+                  <div className="h-full bg-emerald-500" style={{ width: `${(region.healthy / region.sites) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

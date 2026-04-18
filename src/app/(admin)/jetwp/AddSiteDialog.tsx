@@ -7,20 +7,54 @@ import { Input, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/toast/ToastProvider";
 
-const plans = [
-  { id: "Starter", price: "90 kr/mån", limits: "10 GB · 1 sajt" },
-  { id: "Business", price: "290 kr/mån", limits: "20 GB · 5 sajter" },
-  { id: "Scale", price: "799 kr/mån", limits: "50 GB · 15 sajter" },
-  { id: "Enterprise", price: "från 1990 kr", limits: "100 GB · obegränsat" },
+const installModes = [
+  {
+    id: "provision",
+    title: "Ny WordPress-installation",
+    description: "JetWP provisionerar databas, SSL, baseline-backup och agent automatiskt.",
+  },
+  {
+    id: "pair",
+    title: "Parkoppla befintlig installation",
+    description: "Anvand en pairing-token och anslut en redan existerande WordPress-sajt.",
+  },
 ] as const;
 
-type PlanId = (typeof plans)[number]["id"];
+const environments = [
+  { id: "production", title: "Production", description: "Normal driftmiljo for publik trafik." },
+  { id: "staging", title: "Staging", description: "For test, verifiering och deploy-preview innan release." },
+] as const;
+
+const baselineProfiles = [
+  {
+    id: "standard",
+    title: "Standard managed",
+    description: "Backup, security scan, cache och heartbeats aktiveras.",
+  },
+  {
+    id: "commerce",
+    title: "WooCommerce",
+    description: "Extra backupfrekvens, checkout-overvakning och serial updates.",
+  },
+  {
+    id: "content",
+    title: "Content heavy",
+    description: "Media-optimering, CDN-cache och fokus pa editor-workflows.",
+  },
+] as const;
+
+type InstallMode = (typeof installModes)[number]["id"];
+type Environment = (typeof environments)[number]["id"];
+type BaselineProfile = (typeof baselineProfiles)[number]["id"];
 
 export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
-  const [plan, setPlan] = useState<PlanId>("Business");
+  const [installMode, setInstallMode] = useState<InstallMode>("provision");
+  const [environment, setEnvironment] = useState<Environment>("production");
+  const [profile, setProfile] = useState<BaselineProfile>("standard");
+  const [region, setRegion] = useState("Stockholm");
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
@@ -28,7 +62,10 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
     setStep(1);
     setName("");
     setDomain("");
-    setPlan("Business");
+    setInstallMode("provision");
+    setEnvironment("production");
+    setProfile("standard");
+    setRegion("Stockholm");
   };
 
   const close = () => {
@@ -40,7 +77,9 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      toast.success("Sajt skapas", `${name} (${domain}) · provisionering tar 2–3 min`);
+      const modeLabel = installModes.find((item) => item.id === installMode)?.title ?? installMode;
+      const profileLabel = baselineProfiles.find((item) => item.id === profile)?.title ?? profile;
+      toast.success("Sajt skapas", `${name} (${domain}) · ${modeLabel} · ${profileLabel} · ${region}`);
       close();
     }, 900);
   };
@@ -49,20 +88,20 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
     <Dialog
       open={open}
       onClose={close}
-      title="Lägg till sajt"
-      description={step === 1 ? "Vi skapar en ny WordPress-installation åt dig" : "Välj plan"}
-      size="lg"
+      title="Lagg till sajt"
+      description={step === 1 ? "Registrera grunddata for den sajt som ska in i JetWP." : "Valj hur sajten ska provisioneras och driftas."}
+      size="xl"
       footer={
         step === 1 ? (
           <>
             <Button variant="secondary" onClick={close}>Avbryt</Button>
-            <Button onClick={() => setStep(2)} disabled={!name || !domain}>Nästa</Button>
+            <Button onClick={() => setStep(2)} disabled={!name || !domain}>Nasta</Button>
           </>
         ) : (
           <>
             <Button variant="secondary" onClick={() => setStep(1)}>Tillbaka</Button>
             <Button onClick={submit} disabled={loading}>
-              {loading ? "Skapar…" : "Skapa sajt"}
+              {loading ? "Skapar..." : "Skapa sajt"}
             </Button>
           </>
         )
@@ -71,42 +110,107 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
       <div className="mb-4 flex items-center gap-2">
         <StepDot active={step >= 1} done={step > 1} n={1} label="Sajt" />
         <div className="h-px flex-1 bg-border" />
-        <StepDot active={step >= 2} done={false} n={2} label="Plan" />
+        <StepDot active={step >= 2} done={false} n={2} label="Provisionering" />
       </div>
 
       {step === 1 ? (
         <div className="space-y-4">
           <div>
             <Label htmlFor="site-name">Namn</Label>
-            <Input id="site-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="T.ex. Min butik" autoFocus />
+            <Input id="site-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="T.ex. Min butik" autoFocus />
           </div>
           <div>
-            <Label htmlFor="site-domain">Domän</Label>
-            <Input id="site-domain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="minbutik.se" />
+            <Label htmlFor="site-domain">Doman</Label>
+            <Input id="site-domain" value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="minbutik.se" />
             <p className="mt-1.5 text-xs text-muted">
-              Vi konfigurerar DNS och SSL automatiskt efter att sajten provisionerats.
+              Primardomanen registreras direkt och kan kompletteras med alias eller redirects efter skapande.
             </p>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2.5">
-          {plans.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPlan(p.id)}
-              className={clsx(
-                "flex flex-col items-start gap-1 rounded-lg border bg-surface p-3.5 text-left transition-colors",
-                plan === p.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
-              )}
-            >
-              <div className="flex w-full items-center justify-between">
-                <span className="font-medium">{p.id}</span>
-                {plan === p.id && <span className="h-2 w-2 rounded-full bg-fg" />}
+        <div className="space-y-5">
+          <div>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Installationssatt</div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {installModes.map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setInstallMode(mode.id)}
+                  className={clsx(
+                    "h-full rounded-xl border bg-surface p-3.5 text-left transition-colors",
+                    installMode === mode.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{mode.title}</span>
+                    {installMode === mode.id && <span className="h-2 w-2 rounded-full bg-fg" />}
+                  </div>
+                  <div className="mt-1 text-sm text-muted">{mode.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Miljo</div>
+              <div className="space-y-2">
+                {environments.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setEnvironment(item.id)}
+                    className={clsx(
+                      "w-full rounded-xl border bg-surface p-3 text-left transition-colors",
+                      environment === item.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                    )}
+                  >
+                    <div className="font-medium">{item.title}</div>
+                    <div className="mt-1 text-xs text-muted">{item.description}</div>
+                  </button>
+                ))}
               </div>
-              <span className="text-sm text-muted">{p.price}</span>
-              <span className="text-xs text-muted">{p.limits}</span>
-            </button>
-          ))}
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Region</div>
+              <select
+                value={region}
+                onChange={(event) => setRegion(event.target.value)}
+                className="w-full rounded-lg border bg-surface px-3 py-2 text-sm"
+              >
+                <option>Stockholm</option>
+                <option>Goteborg</option>
+                <option>Frankfurt</option>
+              </select>
+
+              <div className="mt-4 mb-2 text-xs font-medium uppercase tracking-wider text-muted">Baseline-profil</div>
+              <div className="space-y-2">
+                {baselineProfiles.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setProfile(item.id)}
+                    className={clsx(
+                      "w-full rounded-xl border bg-surface p-3 text-left transition-colors",
+                      profile === item.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                    )}
+                  >
+                    <div className="font-medium">{item.title}</div>
+                    <div className="mt-1 text-xs text-muted">{item.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-bg/40 p-4">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted">Detta sker vid skapande</div>
+            <ul className="mt-2 space-y-1.5 text-sm text-muted">
+              <li>DNS och SSL forbereds for {domain || "vald doman"}.</li>
+              <li>Agent, heartbeat och baseline-backup aktiveras.</li>
+              <li>{environment === "staging" ? "Sajten markeras som staging och deploys blockeras mot publik trafik." : "Sajten markeras som production och tas in i ordinarie overvaking."}</li>
+              <li>{installMode === "pair" ? "En pairing-token forvantas innan sajten blir aktiv i flottan." : "JetWP provisionerar en ny WordPress-installation i vald region."}</li>
+            </ul>
+          </div>
         </div>
       )}
     </Dialog>

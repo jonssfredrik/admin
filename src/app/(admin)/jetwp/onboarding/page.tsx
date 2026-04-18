@@ -59,6 +59,16 @@ export default function OnboardingPage() {
   --server ${server || "<server-id>"} \\
   --path ${path}`;
 
+  const revoke = (token: string) => {
+    setTokens((prev) => prev.map((entry) => entry.token === token ? { ...entry, used: true, expiresAt: "revoked" } : entry));
+    toast.info("Token revoked", token);
+  };
+
+  const extend = (token: string) => {
+    setTokens((prev) => prev.map((entry) => entry.token === token ? { ...entry, expiresAt: "om 48 tim" } : entry));
+    toast.success("Expiry extended", token);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -175,9 +185,13 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 {!t.used && (
-                  <Button variant="secondary" onClick={() => copy(t.token)}>
-                    <Copy size={12} className="mr-1.5" />Kopiera
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => copy(t.token)}>
+                      <Copy size={12} className="mr-1.5" />Kopiera
+                    </Button>
+                    <Button variant="secondary" onClick={() => extend(t.token)}>Forlang</Button>
+                    <Button variant="secondary" onClick={() => revoke(t.token)}>Revoke</Button>
+                  </div>
                 )}
               </div>
             ))}
@@ -211,6 +225,27 @@ export default function OnboardingPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-2">
+          <Check size={14} className="text-emerald-500" />
+          <div className="text-sm font-semibold">4. Verifiera installation</div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border bg-bg/40 p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted">Heartbeat</div>
+            <div className="mt-2 text-sm">Senaste heartbeat inom 30 sek</div>
+          </div>
+          <div className="rounded-lg border bg-bg/40 p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted">Integrity</div>
+            <div className="mt-2 text-sm">Kor integrity.check pa sajten</div>
+          </div>
+          <div className="rounded-lg border bg-bg/40 p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted">Baseline</div>
+            <div className="mt-2 text-sm">Skapa forsta backup och koppla notifieringsgrupp</div>
+          </div>
+        </div>
+      </Card>
 
       <Card className="p-5">
         <div className="flex items-center gap-2">

@@ -11,13 +11,14 @@ interface Props {
   description?: string;
   children?: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 const sizes = {
   sm: "max-w-sm",
   md: "max-w-md",
   lg: "max-w-lg",
+  xl: "max-w-5xl",
 };
 
 export function Dialog({ open, onClose, title, description, children, footer, size = "md" }: Props) {
