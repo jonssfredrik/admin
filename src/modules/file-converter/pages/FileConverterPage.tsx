@@ -12,7 +12,6 @@ import {
   FileArchive,
   FileCog,
   FileImage,
-  FileSearch,
   Filter,
   Layers3,
   Pause,
@@ -110,11 +109,12 @@ export function FileConverterPage() {
   const dragDepthRef = useRef(0);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ConversionToolDefinition["category"] | "all">("all");
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedStageIds, setSelectedStageIds] = useState<Set<string>>(new Set());
+  const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const workspace = useFileConverterWorkspace();
   const parallelism = workspace.parallelism;
   const activity = useConversionQueueEngine(parallelism);
-  const [isDragging, setIsDragging] = useState(false);
-  const [selectedStageIds, setSelectedStageIds] = useState<Set<string>>(new Set());
   const queueItems = activity.queueItems;
   const stagedFiles = workspace.stagedFiles;
 
@@ -139,13 +139,13 @@ export function FileConverterPage() {
     const running = queueItems.filter((item) => item.status === "running").length;
     const queued = queueItems.filter((item) => item.status === "queued").length;
     const paused = queueItems.filter((item) => item.status === "paused").length;
-    return { completed, running, queued, paused };
+    const canceled = queueItems.filter((item) => item.status === "canceled").length;
+    return { completed, running, queued, paused, canceled };
   }, [queueItems]);
 
   const availableToQueue = stagedFiles.filter(
     (file) => file.extension && file.selectedToolId && file.compatibleToolIds.includes(file.selectedToolId),
   );
-
   const unsupportedFiles = stagedFiles.filter((file) => file.compatibleToolIds.length === 0);
   const supportedSelectedFiles = stagedFiles.filter(
     (file) => selectedStageIds.has(file.id) && file.compatibleToolIds.length > 0,
@@ -170,12 +170,27 @@ export function FileConverterPage() {
   ).length;
   const allStagedSelected = stagedFiles.length > 0 && selectedCount === stagedFiles.length;
 
-  const recentCompleted = useMemo(
+  const completedItems = useMemo(
     () =>
       [...queueItems]
         .filter((item) => item.status === "completed")
-        .sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0))
-        .slice(0, 6),
+        .sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0)),
+    [queueItems],
+  );
+  const resultItems = completedItems.slice(0, 8);
+  const selectedResults = resultItems.filter((item) => selectedResultIds.has(item.id));
+  const allResultItemsSelected = resultItems.length > 0 && selectedResults.length === resultItems.length;
+  const stagedFormats = useMemo(
+    () => new Set(stagedFiles.map((file) => file.extension).filter((format): format is FileFormat => !!format)),
+    [stagedFiles],
+  );
+
+  const activeQueueItems = useMemo(
+    () =>
+      [...queueItems]
+        .filter((item) => item.status !== "completed")
+        .sort((left, right) => left.createdAt - right.createdAt)
+        .slice(0, 3),
     [queueItems],
   );
 
@@ -229,6 +244,14 @@ export function FileConverterPage() {
       return next.size === current.size ? current : next;
     });
   }, [stagedFiles]);
+
+  useEffect(() => {
+    setSelectedResultIds((current) => {
+      const validIds = new Set(resultItems.map((item) => item.id));
+      const next = new Set([...current].filter((id) => validIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [resultItems]);
 
   function openPicker() {
     inputRef.current?.click();
@@ -290,12 +313,10 @@ export function FileConverterPage() {
     event.preventDefault();
     dragDepthRef.current = 0;
     setIsDragging(false);
-
     const files = Array.from(event.dataTransfer.files ?? []).map((file) => ({
       name: file.name,
       size: file.size,
     }));
-
     if (files.length > 0) addFiles(files);
   }
 
@@ -370,7 +391,6 @@ export function FileConverterPage() {
       (file): file is StagedFile & { extension: FileFormat; selectedToolId: string } =>
         !!file.extension && !!file.selectedToolId && file.compatibleToolIds.includes(file.selectedToolId),
     );
-
     if (convertible.length === 0) return;
 
     const batchId = makeId("batch");
@@ -378,7 +398,6 @@ export function FileConverterPage() {
     const nextItems = convertible.flatMap((file) => {
       const tool = toolMap.get(file.selectedToolId);
       if (!tool) return [];
-
       return [
         {
           id: makeId("queue"),
@@ -412,6 +431,44 @@ export function FileConverterPage() {
 
   function downloadResult(resultName: string) {
     toast.success("Export förberedd", resultName);
+  }
+
+  function downloadSelectedResults() {
+    if (selectedResults.length === 0) return;
+    toast.success(
+      selectedResults.length === 1 ? "1 export förbereds" : `${selectedResults.length} exporter förbereds`,
+    );
+  }
+
+  function downloadAllResults() {
+    if (completedItems.length === 0) return;
+    toast.success(
+      completedItems.length === 1 ? "1 export förbereds" : `${completedItems.length} exporter förbereds`,
+    );
+  }
+
+  function copySelectedResultNames() {
+    if (selectedResults.length === 0) return;
+    void navigator.clipboard.writeText(selectedResults.map((item) => item.resultName).join("\n"));
+    toast.success(
+      selectedResults.length === 1 ? "1 filnamn kopierat" : `${selectedResults.length} filnamn kopierade`,
+    );
+  }
+
+  function toggleResultSelection(itemId: string) {
+    setSelectedResultIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllResults() {
+    setSelectedResultIds((current) => {
+      if (resultItems.length > 0 && current.size === resultItems.length) return new Set();
+      return new Set(resultItems.map((item) => item.id));
+    });
   }
 
   function pauseItem(itemId: string) {
@@ -523,30 +580,33 @@ export function FileConverterPage() {
         onChange={onNativeFilePick}
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard label="Tillgängliga flöden" value={String(conversionTools.length)} hint="Bild, dokument och ikonformat i samma verktyg." />
         <StatCard label="Filer i staging" value={String(stagedFiles.length)} hint={totalStagedSize ? formatBytes(totalStagedSize) : workspace.hydrated ? "Ingen fil inlagd" : "Laddar arbetsyta..."} />
-        <StatCard
-          label="Aktiv kö"
-          value={String(queueSummary.running + queueSummary.queued + queueSummary.paused)}
-          hint={queueSummary.paused > 0 ? `${activeCapacityHint} • ${queueSummary.paused} pausade` : activeCapacityHint}
-        />
-        <StatCard label="Färdiga körningar" value={String(queueSummary.completed)} hint="Resultat med separat batchhistorik." />
+        <StatCard label="Exporter klara" value={String(queueSummary.completed)} hint={queueSummary.canceled > 0 ? `${queueSummary.canceled} avbrutna jobb i kön` : "Klara filer med snabb nedladdning."} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <Card id="upload" className="p-0">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.9fr]">
+        <Card className="p-0">
           <div className="border-b p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-              <FileArchive size={16} />
-              Inmatning och batchkö
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <FileArchive size={16} />
+                  Arbetsyta
+                </div>
+                <p className="mt-1 text-sm text-muted">
+                  Lägg till filer, kontrollera matchning och starta batchen utan att lämna samma arbetsyta.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {unsupportedFiles.length > 0 && <Badge tone="warning">{unsupportedFiles.length} utan matchning</Badge>}
+                <Badge tone={availableToQueue.length > 0 ? "success" : "neutral"}>{availableToQueue.length} redo</Badge>
+              </div>
             </div>
-            <p className="mt-1 text-sm text-muted">
-              Lägg till en eller flera filer. Varje fil matchas automatiskt mot kompatibla konverteringar i katalogen.
-            </p>
           </div>
 
-          <div className="grid gap-4 p-5 lg:grid-cols-[1fr_0.95fr]">
+          <div className="grid gap-5 border-b p-5 lg:grid-cols-[1fr_0.8fr]">
             <div
               role="button"
               tabIndex={0}
@@ -570,114 +630,64 @@ export function FileConverterPage() {
                 <Upload size={18} />
               </div>
               <div className="mt-4 text-base font-semibold tracking-tight">
-                {isDragging ? "Släpp filerna här" : "Släpp in filer i staging"}
+                {isDragging ? "Släpp filerna här" : "Lägg till filer i staging"}
               </div>
               <p className="mt-1 max-w-md text-sm text-muted">
-                Uppladdning med stöd för JPG, PNG, WEBP, PDF, HEIC och SVG. Filerna läggs först i staging där du kan kontrollera matchning, välja verktyg och sedan starta batchen.
+                JPG, PNG, WEBP, PDF, HEIC och SVG matchas direkt mot rätt konverteringsflöden innan batchen startar.
               </p>
               <div className="mt-3 rounded-xl border bg-surface/70 px-3 py-2 text-xs text-muted">
                 Dra in filer från datorn eller klicka för att välja manuellt. Demo-filer läggs bara in när du väljer det.
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {acceptedFormats.map((format) => (
-                  <span key={format} className="rounded-full border bg-surface px-2.5 py-1 text-xs font-medium">
+                  <span
+                    key={format}
+                    className={clsx(
+                      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                      stagedFormats.has(format)
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : "bg-surface text-muted",
+                    )}
+                  >
                     {formatLabel(format)}
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border bg-bg/40 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Layers3 size={15} />
-                  Köinställningar
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium">Parallella jobb</label>
-                    <select
-                      value={parallelism}
-                      onChange={(event) => workspace.setParallelism(Number(event.target.value))}
-                      className="h-9 w-full rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
-                    >
-                      {parallelOptions.map((value) => (
-                        <option key={value} value={value}>
-                          {value} samtidiga jobb
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium">Batchläge</label>
-                    <div className="flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted">
-                      Parallell kömotor
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={queueBatch} disabled={availableToQueue.length === 0}>
-                    <Play size={14} strokeWidth={2} className="mr-1.5" />
-                    Starta batch
-                  </Button>
-                  <Button variant="secondary" onClick={() => workspace.resetWorkspace()} disabled={stagedFiles.length === 0 && parallelism === 4}>
-                    Töm staging
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border bg-bg/40 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <FileSearch size={15} />
-                  Verktygsöversikt
-                </div>
-                <p className="mt-2 text-sm text-muted">
-                  Verktygskatalogen visar vilka filtyper som kan konverteras just nu och hjälper dig att välja rätt flöde för varje fil innan batchen startar.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Clock3 size={15} />
-            Driftbild
-          </div>
-          <div className="mt-4 space-y-3">
             <div className="rounded-2xl border bg-bg/40 p-4">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted">Nu aktivt</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">{queueSummary.running + queueSummary.paused}</div>
-              <div className="mt-1 text-sm text-muted">
-                {queueSummary.paused > 0 ? `${queueSummary.running} körs, ${queueSummary.paused} pausade.` : "Jobb som behandlas just nu."}
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Layers3 size={15} />
+                Batchinställningar
               </div>
-            </div>
-            <div className="rounded-2xl border bg-bg/40 p-4">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted">Redo att köra</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">{availableToQueue.length}</div>
-              <div className="mt-1 text-sm text-muted">Filer med giltigt verktygsval i staging.</div>
-            </div>
-            <div className="rounded-2xl border bg-bg/40 p-4">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted">Senaste output</div>
-              <div className="mt-2 text-sm font-medium">{recentCompleted[0]?.resultName ?? "Ingen output ännu"}</div>
-              <div className="mt-1 text-sm text-muted">
-                {recentCompleted[0] ? "Senast avslutade körning med snabbåtgärder i resultatlistan." : "Kör en batch för att fylla historiken."}
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium">Parallella jobb</label>
+                  <select
+                    value={parallelism}
+                    onChange={(event) => workspace.setParallelism(Number(event.target.value))}
+                    className="h-9 w-full rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
+                  >
+                    {parallelOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {value} samtidiga jobb
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-xl border bg-surface px-3 py-2 text-sm text-muted">
+                  Arbetsytan sparas lokalt så att staging och kapacitet ligger kvar när du kommer tillbaka.
+                </div>
               </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="p-0">
-          <div className="flex items-center justify-between border-b p-5">
-            <div>
-              <div className="text-sm font-semibold tracking-tight">Staginglista</div>
-              <div className="mt-1 text-sm text-muted">Filer och köinställningar sparas lokalt så att du kan fortsätta där du slutade.</div>
-            </div>
-            <div className="flex items-center gap-2">
-              {unsupportedFiles.length > 0 && <Badge tone="warning">{unsupportedFiles.length} utan matchning</Badge>}
-              <Badge tone={availableToQueue.length > 0 ? "success" : "neutral"}>{availableToQueue.length} redo</Badge>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={queueBatch} disabled={availableToQueue.length === 0}>
+                  <Play size={14} strokeWidth={2} className="mr-1.5" />
+                  Starta batch
+                </Button>
+                <Button variant="secondary" onClick={() => workspace.resetWorkspace()} disabled={stagedFiles.length === 0 && parallelism === 4}>
+                  Töm staging
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -687,13 +697,8 @@ export function FileConverterPage() {
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <span className="font-semibold">{selectedCount} valda</span>
                   <span className="text-bg/75">{selectedReadyCount} redo</span>
-                  {selectedUnsupportedCount > 0 && (
-                    <span className="text-bg/75">{selectedUnsupportedCount} utan matchning</span>
-                  )}
-                  <button
-                    onClick={() => setSelectedStageIds(new Set())}
-                    className="text-bg/75 transition-colors hover:text-bg"
-                  >
+                  {selectedUnsupportedCount > 0 && <span className="text-bg/75">{selectedUnsupportedCount} utan matchning</span>}
+                  <button onClick={() => setSelectedStageIds(new Set())} className="text-bg/75 transition-colors hover:text-bg">
                     Rensa val
                   </button>
                 </div>
@@ -708,9 +713,7 @@ export function FileConverterPage() {
                     disabled={commonToolIds.length === 0}
                     className="h-9 min-w-[220px] rounded-lg border border-fg/15 bg-bg px-3 text-sm text-fg outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5 disabled:text-muted"
                   >
-                    <option value="">
-                      {commonToolIds.length > 0 ? "Välj verktyg för valda" : "Inget gemensamt verktyg"}
-                    </option>
+                    <option value="">{commonToolIds.length > 0 ? "Välj verktyg för valda" : "Inget gemensamt verktyg"}</option>
                     {commonToolIds.map((toolId) => (
                       <option key={toolId} value={toolId}>
                         {toolMap.get(toolId)?.title}
@@ -741,6 +744,16 @@ export function FileConverterPage() {
               </div>
             </div>
           )}
+
+          <div className="px-5 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold tracking-tight">Staginglista</div>
+                <div className="mt-1 text-sm text-muted">Lägg till filer, kontrollera matchning och finjustera verktyg innan batchen körs.</div>
+              </div>
+              <div className="text-sm text-muted">{totalStagedSize > 0 ? formatBytes(totalStagedSize) : "Ingen storlek än"}</div>
+            </div>
+          </div>
 
           <Table className="rounded-none border-0 shadow-none">
             <thead>
@@ -796,11 +809,7 @@ export function FileConverterPage() {
                   )}
                 >
                   <Td className="pr-0">
-                    <Checkbox
-                      checked={selectedStageIds.has(file.id)}
-                      onChange={() => toggleStageSelection(file.id)}
-                      ariaLabel={`Välj ${file.name}`}
-                    />
+                    <Checkbox checked={selectedStageIds.has(file.id)} onChange={() => toggleStageSelection(file.id)} ariaLabel={`Välj ${file.name}`} />
                   </Td>
                   <Td>
                     <div className="flex items-center gap-3">
@@ -843,9 +852,7 @@ export function FileConverterPage() {
                         Ta bort
                       </Button>
                       {file.compatibleToolIds.length === 0 && (
-                        <div className="text-xs text-muted">
-                          Byt till ett stödd format för att kunna köa filen.
-                        </div>
+                        <div className="text-xs text-muted">Byt till ett stödd format för att kunna köa filen.</div>
                       )}
                     </div>
                   </Td>
@@ -855,57 +862,235 @@ export function FileConverterPage() {
           </Table>
         </Card>
 
-        <Card id="queue" className="p-5">
-          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Play size={15} />
-            Batchhistorik
-          </div>
-          <div className="mt-4 space-y-3">
-            {batchSummary.length === 0 && (
-              <div className="rounded-2xl border bg-bg/40 p-4 text-sm text-muted">
-                Inga batcher ännu. När du kör staginglistan skapas en separat batch med egen progress.
+        <div className="space-y-4">
+          <Card className="p-0">
+            <div className="border-b p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold tracking-tight">Resultat och nedladdning</div>
+                  <div className="mt-1 text-sm text-muted">Klara exporter samlade högst upp med tydliga bulk-actions.</div>
+                </div>
+                <Badge tone={completedItems.length > 0 ? "success" : "neutral"}>{completedItems.length} klara</Badge>
               </div>
-            )}
-            {batchSummary.map((batch) => (
-              <div key={batch.batchId} className="rounded-2xl border bg-bg/40 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium">{batch.label}</div>
-                    <div className="mt-1 text-xs text-muted">
-                      {new Date(batch.createdAt).toLocaleTimeString("sv-SE", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
+            </div>
+
+            <div className="border-b p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold tracking-tight">Aktiv kö</div>
+                  <div className="mt-1 text-sm text-muted">Visar max tre pågående jobb åt gången. När ett jobb blir klart lyfts nästa fram automatiskt.</div>
+                </div>
+                <Badge tone={activeQueueItems.length > 0 ? "warning" : "neutral"}>
+                  {activeQueueItems.length > 0 ? `${activeQueueItems.length} visas` : "Ingen aktiv kö"}
+                </Badge>
+              </div>
+              <div className="mt-4 space-y-3 overflow-hidden">
+                {activeQueueItems.length === 0 && (
+                  <div className="rounded-2xl border bg-bg/40 p-4 text-sm text-muted">
+                    Inga aktiva jobb just nu. Batcher som körs eller väntar visas här direkt.
                   </div>
-                  <Badge
-                    tone={
-                      batch.active > 0 || batch.paused > 0
-                        ? "warning"
-                        : batch.canceled > 0
-                          ? "danger"
-                          : "success"
-                    }
-                  >
-                    {batch.active > 0
-                      ? `${batch.completed}/${batch.total} klara`
-                      : batch.paused > 0
-                        ? `${batch.paused} pausade`
-                        : batch.canceled > 0
-                          ? `${batch.canceled} avbrutna`
-                          : `${batch.completed}/${batch.total} klara`}
-                  </Badge>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
-                  <div
-                    className="h-full rounded-full bg-fg transition-all"
-                    style={{ width: `${(batch.completed / batch.total) * 100}%` }}
-                  />
-                </div>
+                )}
+                {activeQueueItems.map((item) => {
+                  const tool = toolMap.get(item.toolId);
+                  return (
+                    <div key={item.id} className="rounded-2xl border bg-bg/30 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface">
+                              <FileCog size={15} className="text-muted" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">{item.fileName}</div>
+                              <div className="text-xs text-muted">{tool?.title}</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
+                            <span className="rounded-full border bg-surface px-2 py-1">
+                              {formatLabel(item.sourceFormat)} till {tool ? formatLabel(tool.outputFormat) : "?"}
+                            </span>
+                            <span className="rounded-full border bg-surface px-2 py-1">{formatBytes(item.size)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 self-start">
+                          <Badge
+                            tone={
+                              item.status === "running" || item.status === "paused"
+                                ? "warning"
+                                : item.status === "canceled"
+                                  ? "danger"
+                                  : "neutral"
+                            }
+                          >
+                            {item.status === "running" ? "Körs" : item.status === "paused" ? "Pausad" : item.status === "canceled" ? "Avbruten" : "I kö"}
+                          </Badge>
+                          <RowMenu
+                            items={[
+                              ...(item.status === "running" ? [{ label: "Pausa jobb", icon: Pause, onClick: () => pauseItem(item.id) }] : []),
+                              ...(item.status === "paused" ? [{ label: "Återuppta jobb", icon: Play, onClick: () => resumeItem(item.id) }] : []),
+                              ...(item.status === "queued" || item.status === "running" || item.status === "paused"
+                                ? [{ label: "Avbryt jobb", icon: XCircle, danger: true, onClick: () => cancelItem(item.id) }]
+                                : []),
+                              { divider: true },
+                              { label: "Ta bort från listan", icon: Trash2, danger: true, onClick: () => removeItem(item.id) },
+                            ]}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
+                        <div
+                          className={clsx(
+                            "h-full rounded-full transition-all",
+                            item.status === "canceled" ? "bg-red-500" : item.status === "paused" ? "bg-amber-500" : "bg-fg",
+                          )}
+                          style={{ width: `${item.progress}%` }}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                        <span>
+                          {item.status === "canceled"
+                            ? "Avbruten innan export"
+                            : item.status === "paused"
+                              ? `${item.progress}% • väntar på återupptagning`
+                              : `${item.progress}%`}
+                        </span>
+                        <span>{item.resultName}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </Card>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={downloadAllResults} disabled={completedItems.length === 0}>
+                  <Download size={14} strokeWidth={2} className="mr-1.5" />
+                  Ladda ned alla klara
+                </Button>
+                <Button variant="secondary" onClick={downloadSelectedResults} disabled={selectedResults.length === 0}>
+                  <Download size={14} strokeWidth={2} className="mr-1.5" />
+                  Ladda ned valda
+                </Button>
+                <Button variant="secondary" onClick={copySelectedResultNames} disabled={selectedResults.length === 0}>
+                  <Copy size={14} strokeWidth={2} className="mr-1.5" />
+                  Kopiera valda namn
+                </Button>
+              </div>
+            </div>
+
+            <Table className="rounded-none border-0 shadow-none">
+              <thead>
+                <tr>
+                  <Th className="w-8 pr-0">
+                    <Checkbox
+                      checked={allResultItemsSelected}
+                      indeterminate={selectedResults.length > 0 && !allResultItemsSelected}
+                      onChange={toggleSelectAllResults}
+                      ariaLabel="Markera alla resultat"
+                    />
+                  </Th>
+                  <Th>Output</Th>
+                  <Th>Status</Th>
+                  <Th className="text-right">Åtgärder</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {resultItems.length === 0 && (
+                  <tr>
+                    <Td colSpan={4} className="py-10 text-center text-sm text-muted">
+                      Inga exporter klara ännu. När en batch blir färdig syns resultaten här direkt.
+                    </Td>
+                  </tr>
+                )}
+                {resultItems.map((item) => (
+                  <tr key={item.id} className={clsx("transition-colors hover:bg-bg/50", selectedResultIds.has(item.id) && "bg-fg/[0.03]")}>
+                    <Td className="pr-0">
+                      <Checkbox checked={selectedResultIds.has(item.id)} onChange={() => toggleResultSelection(item.id)} ariaLabel={`Välj ${item.resultName}`} />
+                    </Td>
+                    <Td>
+                      <div className="font-medium">{item.resultName}</div>
+                      <div className="mt-1 text-xs text-muted">
+                        {new Date(item.completedAt ?? item.createdAt).toLocaleTimeString("sv-SE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </Td>
+                    <Td>
+                      <Badge tone="success">Klar</Badge>
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => copyResultName(item.resultName)}
+                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                          aria-label={`Kopiera ${item.resultName}`}
+                        >
+                          <Copy size={14} />
+                        </button>
+                        <button
+                          onClick={() => downloadResult(item.resultName)}
+                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                          aria-label={`Ladda ned ${item.resultName}`}
+                        >
+                          <Download size={14} />
+                        </button>
+                        <button
+                          onClick={() => retryItem(item.id)}
+                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                          aria-label={`Kör om ${item.resultName}`}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+
+          <Card className="p-0">
+            <div className="border-b p-5">
+              <div className="text-sm font-semibold tracking-tight">Senaste batcher</div>
+              <div className="mt-1 text-sm text-muted">Snabb överblick över de senaste körningarna från samma arbetsyta.</div>
+            </div>
+            <div className="space-y-3 p-5">
+              {batchSummary.length === 0 && (
+                <div className="rounded-2xl border bg-bg/40 p-4 text-sm text-muted">
+                  Inga batcher ännu. När du kör staginglistan skapas en separat batch med egen progress.
+                </div>
+              )}
+              {batchSummary.map((batch) => (
+                <div key={batch.batchId} className="rounded-2xl border bg-bg/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">{batch.label}</div>
+                      <div className="mt-1 text-xs text-muted">
+                        {new Date(batch.createdAt).toLocaleTimeString("sv-SE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                    <Badge tone={batch.active > 0 || batch.paused > 0 ? "warning" : batch.canceled > 0 ? "danger" : "success"}>
+                      {batch.active > 0
+                        ? `${batch.completed}/${batch.total} klara`
+                        : batch.paused > 0
+                          ? `${batch.paused} pausade`
+                          : batch.canceled > 0
+                            ? `${batch.canceled} avbrutna`
+                            : `${batch.completed}/${batch.total} klara`}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+                    <div className="h-full rounded-full bg-fg transition-all" style={{ width: `${(batch.completed / batch.total) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
@@ -919,12 +1104,7 @@ export function FileConverterPage() {
               <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
                 <div className="relative min-w-[220px]">
                   <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Sök format eller verktyg..."
-                    className="pl-9"
-                  />
+                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Sök format eller verktyg..." className="pl-9" />
                 </div>
                 <select
                   value={category}
@@ -972,164 +1152,6 @@ export function FileConverterPage() {
           </div>
         </Card>
 
-        <Card className="p-0">
-          <div className="border-b p-5">
-            <div className="text-sm font-semibold tracking-tight">Aktiv kö och resultat</div>
-            <div className="mt-1 text-sm text-muted">
-              Visar pågående jobb, progress och genererade resultat från den aktiva batchkön.
-            </div>
-          </div>
-          <div className="space-y-3 p-5">
-            {queueItems.length === 0 && (
-              <div className="rounded-2xl border bg-bg/40 p-4 text-sm text-muted">
-                Starta en batch för att se köstatus, progress och resultatnamn.
-              </div>
-            )}
-            {queueItems.slice(0, 8).map((item) => {
-              const tool = toolMap.get(item.toolId);
-              return (
-                <div key={item.id} className="rounded-2xl border bg-bg/30 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface">
-                          <FileCog size={15} className="text-muted" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">{item.fileName}</div>
-                          <div className="text-xs text-muted">{tool?.title}</div>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-                        <span className="rounded-full border bg-surface px-2 py-1">
-                          {formatLabel(item.sourceFormat)} till {tool ? formatLabel(tool.outputFormat) : "?"}
-                        </span>
-                        <span className="rounded-full border bg-surface px-2 py-1">{formatBytes(item.size)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 self-start">
-                      <Badge
-                        tone={
-                          item.status === "completed"
-                            ? "success"
-                            : item.status === "running" || item.status === "paused"
-                              ? "warning"
-                              : item.status === "canceled"
-                                ? "danger"
-                                : "neutral"
-                        }
-                      >
-                        {item.status === "completed"
-                          ? "Klar"
-                          : item.status === "running"
-                            ? "Körs"
-                            : item.status === "paused"
-                              ? "Pausad"
-                              : item.status === "canceled"
-                                ? "Avbruten"
-                                : "I kö"}
-                      </Badge>
-                      <RowMenu
-                        items={[
-                          ...(item.status === "running"
-                            ? [{ label: "Pausa jobb", icon: Pause, onClick: () => pauseItem(item.id) }]
-                            : []),
-                          ...(item.status === "paused"
-                            ? [{ label: "Återuppta jobb", icon: Play, onClick: () => resumeItem(item.id) }]
-                            : []),
-                          ...(item.status === "queued" || item.status === "running" || item.status === "paused"
-                            ? [{ label: "Avbryt jobb", icon: XCircle, danger: true, onClick: () => cancelItem(item.id) }]
-                            : []),
-                          ...(item.status === "completed" || item.status === "canceled"
-                            ? [{ label: "Kör igen", icon: RotateCcw, onClick: () => retryItem(item.id) }]
-                            : []),
-                          { divider: true },
-                          { label: "Ta bort från listan", icon: Trash2, danger: true, onClick: () => removeItem(item.id) },
-                        ]}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
-                    <div
-                      className={clsx(
-                        "h-full rounded-full transition-all",
-                        item.status === "completed"
-                          ? "bg-emerald-500"
-                          : item.status === "canceled"
-                            ? "bg-red-500"
-                            : item.status === "paused"
-                              ? "bg-amber-500"
-                              : "bg-fg",
-                      )}
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                    <span>
-                      {item.status === "completed"
-                        ? `Klar på ${formatDuration((item.completedAt ?? item.createdAt) - item.createdAt)}`
-                        : item.status === "canceled"
-                          ? "Avbruten innan export"
-                          : item.status === "paused"
-                            ? `${item.progress}% • väntar på återupptagning`
-                            : `${item.progress}%`}
-                    </span>
-                    <span>{item.resultName}</span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {recentCompleted.length > 0 && (
-              <div className="rounded-2xl border bg-bg/40 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <CheckCircle2 size={15} />
-                  Senaste exporter
-                </div>
-                <div className="mt-3 space-y-2">
-                  {recentCompleted.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface px-3 py-2 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{item.resultName}</div>
-                        <div className="mt-0.5 text-xs text-muted">
-                          {new Date(item.completedAt ?? item.createdAt).toLocaleTimeString("sv-SE", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => copyResultName(item.resultName)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Kopiera ${item.resultName}`}
-                        >
-                          <Copy size={14} />
-                        </button>
-                        <button
-                          onClick={() => downloadResult(item.resultName)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Ladda ned ${item.resultName}`}
-                        >
-                          <Download size={14} />
-                        </button>
-                        <button
-                          onClick={() => retryItem(item.id)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Kör om ${item.resultName}`}
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
       </div>
     </div>
   );
