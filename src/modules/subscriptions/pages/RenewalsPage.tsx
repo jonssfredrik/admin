@@ -7,9 +7,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Table";
 import { RowMenu } from "@/components/ui/RowMenu";
-import { useSubscriptions } from "@/modules/abonnemang/lib/useSubscriptions";
-import { AbonnemangDialog } from "@/modules/abonnemang/components/AbonnemangDialog";
-import { categoryMeta, statusMeta, toMonthly, type Subscription } from "@/modules/abonnemang/data/core";
+import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
+import { SubscriptionDialog } from "@/modules/subscriptions/components/SubscriptionDialog";
+import { categoryMeta, statusMeta, toMonthly, type Subscription } from "@/modules/subscriptions/data/core";
 import { useToast } from "@/components/toast/ToastProvider";
 
 function formatSEK(n: number) {
@@ -31,7 +31,7 @@ function dayLabel(dateStr: string) {
   return { day, badge: `${diffDays} dagar`, tone: "neutral" as const };
 }
 
-export function FornyelsePage() {
+export function RenewalsPage() {
   const { items, update } = useSubscriptions();
   const { success } = useToast();
   const [editTarget, setEditTarget] = useState<Subscription | undefined>();
@@ -230,7 +230,7 @@ export function FornyelsePage() {
         </div>
       )}
 
-      <AbonnemangDialog
+      <SubscriptionDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}

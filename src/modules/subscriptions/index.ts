@@ -1,17 +1,17 @@
 import { CreditCard } from "lucide-react";
 import type { AdminModuleDefinition } from "@/modules/types";
 
-export const abonnemangModule: AdminModuleDefinition = {
-  id: "abonnemang",
+export const subscriptionsModule: AdminModuleDefinition = {
+  id: "subscriptions",
   title: "Abonnemang",
   shortTitle: "Prenumerationer",
   description: "Spåra och hantera återkommande prenumerationer, kostnader och förnyelsedatum.",
   area: "business",
-  href: "/abonnemang",
+  href: "/subscriptions",
   icon: CreditCard,
   children: [
-    { href: "/abonnemang", label: "Översikt" },
-    { href: "/abonnemang/fornyelsel", label: "Förnyelser" },
+    { href: "/subscriptions", label: "Översikt" },
+    { href: "/subscriptions/renewals", label: "Förnyelser" },
   ],
   metrics: [
     { label: "Typ", value: "Kostnadsöversikt", hint: "Prenumerationer & fakturacykler" },

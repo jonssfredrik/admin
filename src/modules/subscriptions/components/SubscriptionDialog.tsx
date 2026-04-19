@@ -11,7 +11,7 @@ import {
   type Subscription,
   type SubscriptionCategory,
   type SubscriptionStatus,
-} from "@/modules/abonnemang/data/core";
+} from "@/modules/subscriptions/data/core";
 
 interface Props {
   open: boolean;
@@ -45,7 +45,7 @@ const statuses: { value: SubscriptionStatus; label: string }[] = [
 const selectCls =
   "h-9 w-full rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5 text-fg";
 
-export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
+export function SubscriptionDialog({ open, onClose, onSave, initial }: Props) {
   const [form, setForm] = useState<Omit<Subscription, "id">>(EMPTY);
 
   useEffect(() => {
@@ -83,18 +83,18 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
         {/* Row 1 — name + description */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="ab-name">Namn *</Label>
+            <Label htmlFor="sub-name">Namn *</Label>
             <Input
-              id="ab-name"
+              id="sub-name"
               placeholder="Vercel Pro"
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
             />
           </div>
           <div>
-            <Label htmlFor="ab-desc">Beskrivning</Label>
+            <Label htmlFor="sub-desc">Beskrivning</Label>
             <Input
-              id="ab-desc"
+              id="sub-desc"
               placeholder="Frontend-deployment"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
@@ -105,9 +105,9 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
         {/* Row 2 — category + status */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="ab-cat">Kategori</Label>
+            <Label htmlFor="sub-cat">Kategori</Label>
             <select
-              id="ab-cat"
+              id="sub-cat"
               className={selectCls}
               value={form.category}
               onChange={(e) => set("category", e.target.value as SubscriptionCategory)}
@@ -118,9 +118,9 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
             </select>
           </div>
           <div>
-            <Label htmlFor="ab-status">Status</Label>
+            <Label htmlFor="sub-status">Status</Label>
             <select
-              id="ab-status"
+              id="sub-status"
               className={selectCls}
               value={form.status}
               onChange={(e) => set("status", e.target.value as SubscriptionStatus)}
@@ -135,9 +135,9 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
         {/* Row 3 — amount + cycle + next renewal */}
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <Label htmlFor="ab-amount">Belopp (SEK) *</Label>
+            <Label htmlFor="sub-amount">Belopp (SEK) *</Label>
             <Input
-              id="ab-amount"
+              id="sub-amount"
               type="number"
               min={0}
               step={1}
@@ -147,9 +147,9 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
             />
           </div>
           <div>
-            <Label htmlFor="ab-cycle">Fakturacykel</Label>
+            <Label htmlFor="sub-cycle">Fakturacykel</Label>
             <select
-              id="ab-cycle"
+              id="sub-cycle"
               className={selectCls}
               value={form.billingCycle}
               onChange={(e) => set("billingCycle", e.target.value as BillingCycle)}
@@ -161,7 +161,7 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="ab-renewal">Nästa förnyelse *</Label>
+              <Label htmlFor="sub-renewal">Nästa förnyelse *</Label>
               {form.startedAt && (
                 <button
                   type="button"
@@ -183,7 +183,7 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
               )}
             </div>
             <Input
-              id="ab-renewal"
+              id="sub-renewal"
               type="date"
               value={form.nextRenewal}
               onChange={(e) => set("nextRenewal", e.target.value)}
@@ -194,18 +194,18 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
         {/* Row 4 — start date + website */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="ab-started">Startdatum</Label>
+            <Label htmlFor="sub-started">Startdatum</Label>
             <Input
-              id="ab-started"
+              id="sub-started"
               type="date"
               value={form.startedAt}
               onChange={(e) => set("startedAt", e.target.value)}
             />
           </div>
           <div>
-            <Label htmlFor="ab-web">Webbplats</Label>
+            <Label htmlFor="sub-web">Webbplats</Label>
             <Input
-              id="ab-web"
+              id="sub-web"
               type="url"
               placeholder="https://..."
               value={form.website ?? ""}
@@ -216,9 +216,9 @@ export function AbonnemangDialog({ open, onClose, onSave, initial }: Props) {
 
         {/* Row 5 — notes */}
         <div>
-          <Label htmlFor="ab-notes">Anteckningar</Label>
+          <Label htmlFor="sub-notes">Anteckningar</Label>
           <textarea
-            id="ab-notes"
+            id="sub-notes"
             rows={2}
             placeholder="Valfria anteckningar..."
             value={form.notes ?? ""}

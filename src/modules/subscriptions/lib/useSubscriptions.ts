@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { defaultSubscriptions, type Subscription } from "@/modules/abonnemang/data/core";
+import { defaultSubscriptions, type Subscription } from "@/modules/subscriptions/data/core";
 
-const KEY = "abonnemang.subscriptions";
+const KEY = "subscriptions.items";
 const listeners = new Set<() => void>();
 
 function read(): Subscription[] {

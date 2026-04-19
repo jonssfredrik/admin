@@ -13,8 +13,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { useToast } from "@/components/toast/ToastProvider";
-import { AbonnemangDialog } from "@/modules/abonnemang/components/AbonnemangDialog";
-import { useSubscriptions } from "@/modules/abonnemang/lib/useSubscriptions";
+import { SubscriptionDialog } from "@/modules/subscriptions/components/SubscriptionDialog";
+import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
 import {
   categoryMeta,
   computeCostTrend,
@@ -23,7 +23,7 @@ import {
   type Subscription,
   type SubscriptionCategory,
   type SubscriptionStatus,
-} from "@/modules/abonnemang/data/core";
+} from "@/modules/subscriptions/data/core";
 
 type FilterTab = SubscriptionStatus | "all";
 type SortKey = "name" | "monthly" | "renewal" | "category";
@@ -95,7 +95,7 @@ function SortTh({
   );
 }
 
-export function AbonnemangPage() {
+export function SubscriptionsPage() {
   const { items, add, update, remove } = useSubscriptions();
   const { success, error } = useToast();
 
@@ -455,7 +455,7 @@ export function AbonnemangPage() {
         )}
       </Card>
 
-      <AbonnemangDialog
+      <SubscriptionDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
