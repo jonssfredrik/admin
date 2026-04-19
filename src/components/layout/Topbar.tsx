@@ -1,11 +1,15 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Bot, Search } from "lucide-react";
+import clsx from "clsx";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NotificationsMenu } from "./NotificationsMenu";
 import { UserMenu } from "./UserMenu";
+import { useChatbot } from "@/components/chatbot/ChatbotContext";
 
 export function Topbar() {
+  const { toggle, isOpen } = useChatbot();
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-surface px-6">
       <button
@@ -19,6 +23,17 @@ export function Topbar() {
         </kbd>
       </button>
       <div className="flex items-center gap-1">
+        <button
+          onClick={toggle}
+          aria-label="Öppna AI-chat"
+          aria-pressed={isOpen}
+          className={clsx(
+            "flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-fg",
+            isOpen && "bg-bg text-fg",
+          )}
+        >
+          <Bot size={16} strokeWidth={1.75} />
+        </button>
         <ThemeToggle />
         <NotificationsMenu />
         <UserMenu />

@@ -24,11 +24,15 @@ export interface StagedFile {
 export interface QueueItem {
   id: string;
   batchId: string;
+  batchLabel?: string;
+  batchConcurrency?: number;
+  presetId?: string;
+  presetName?: string;
   fileName: string;
   size: number;
   sourceFormat: FileFormat;
   toolId: string;
-  status: "queued" | "running" | "completed";
+  status: "queued" | "running" | "paused" | "completed" | "canceled";
   progress: number;
   createdAt: number;
   startedAt?: number;
@@ -45,6 +49,7 @@ export interface ConversionPreset {
   concurrency: number;
   autoArchive: boolean;
   target: "web-assets" | "document-export" | "brand-delivery";
+  favorite?: boolean;
 }
 
 export interface ConversionHistoryBatch {
@@ -57,4 +62,19 @@ export interface ConversionHistoryBatch {
   status: "completed" | "running" | "partial";
   outputSummary: string;
   topToolIds: string[];
+  presetId?: string;
+  presetName?: string;
+}
+
+export interface ConversionHistoryItem {
+  id: string;
+  fileName: string;
+  resultName: string;
+  toolId: string;
+  sourceFormat: FileFormat;
+  status: "completed" | "running" | "queued" | "paused" | "canceled";
+  progress: number;
+  size: number;
+  durationMs?: number;
+  note?: string;
 }

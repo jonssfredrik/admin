@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChevronRight, HelpCircle, PanelLeft, PanelLeftClose } from "lucide-react";
 import clsx from "clsx";
+import { AdminHubMark } from "@/components/brand/AdminHubMark";
 import { navigationSections } from "@/config/navigation";
 
 export function Sidebar() {
@@ -52,13 +53,18 @@ export function Sidebar() {
         collapsed ? "w-[60px]" : "w-64",
       )}
     >
-      <div className={clsx("flex h-14 items-center", collapsed ? "justify-center" : "justify-between px-4")}>
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-fg text-italic">A</div>
-            <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>
-          </div>
+      <div
+        className={clsx(
+          "border-b",
+          collapsed ? "flex flex-col items-center gap-2 py-3" : "flex h-14 items-center justify-between px-4",
         )}
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-black p-2 rounded-md">
+            <AdminHubMark className="h-[22px] w-[22px] shrink-0" />
+          </div>
+          {!collapsed && <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>}
+        </div>
         <button
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandera sidebar" : "Minimera sidebar"}

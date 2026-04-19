@@ -4,8 +4,8 @@ import { ToastProvider } from "@/components/toast/ToastProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Admin",
-  description: "Admin panel",
+  title: "Admin Hub",
+  description: "Admin Hub kontrollpanel",
 };
 
 const noFlash = `

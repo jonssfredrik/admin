@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Input, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { AdminHubMark } from "@/components/brand/AdminHubMark";
 import { useToast } from "@/components/toast/ToastProvider";
 
 export default function LoginPage() {
@@ -24,7 +25,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 h-9 w-9 rounded-xl bg-fg" />
+          <AdminHubMark className="mx-auto mb-4 h-11 w-11" />
           <h1 className="text-[22px] font-semibold tracking-tight">Välkommen tillbaka</h1>
           <p className="mt-1 text-sm text-muted">Logga in på ditt konto</p>
         </div>

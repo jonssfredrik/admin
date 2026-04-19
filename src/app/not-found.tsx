@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { ArrowLeft, Home } from "lucide-react";
+import { AdminHubMark } from "@/components/brand/AdminHubMark";
 
 export default function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-fg" />
+        <AdminHubMark className="mx-auto mb-6 h-12 w-12" />
 
         <div className="relative inline-block">
           <div className="select-none text-[140px] font-semibold leading-none tracking-tighter text-fg/5">

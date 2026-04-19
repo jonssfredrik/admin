@@ -9,6 +9,7 @@ export const conversionPresets: ConversionPreset[] = [
     concurrency: 6,
     autoArchive: true,
     target: "web-assets",
+    favorite: true,
   },
   {
     id: "document-rasterizer",
@@ -41,6 +42,8 @@ export const conversionHistoryBatches: ConversionHistoryBatch[] = [
     status: "completed",
     outputSummary: "16 WEBP, 2 ICO",
     topToolIds: ["jpg-to-webp", "png-to-webp", "png-to-ico"],
+    presetId: "web-performance-pack",
+    presetName: "Web Performance Pack",
   },
   {
     id: "batch-a1ce72",
@@ -52,6 +55,8 @@ export const conversionHistoryBatches: ConversionHistoryBatch[] = [
     status: "completed",
     outputSummary: "4 PNG, 3 JPG",
     topToolIds: ["pdf-to-png", "pdf-to-jpg"],
+    presetId: "document-rasterizer",
+    presetName: "Document Rasterizer",
   },
   {
     id: "batch-c84de1",
@@ -74,5 +79,7 @@ export const conversionHistoryBatches: ConversionHistoryBatch[] = [
     status: "partial",
     outputSummary: "8 PNG, 1 ICO, 2 flaggade",
     topToolIds: ["svg-to-png", "png-to-ico"],
+    presetId: "brand-delivery-kit",
+    presetName: "Brand Delivery Kit",
   },
 ];

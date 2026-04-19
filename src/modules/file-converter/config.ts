@@ -195,3 +195,11 @@ export function formatBytes(value: number) {
 export function formatLabel(format: FileFormat) {
   return format.toUpperCase();
 }
+
+export function formatDuration(durationMs: number) {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds} s`;
+  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
+}

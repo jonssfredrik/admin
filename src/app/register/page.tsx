@@ -6,6 +6,7 @@ import { ArrowRight, Check } from "lucide-react";
 import clsx from "clsx";
 import { Input, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { AdminHubMark } from "@/components/brand/AdminHubMark";
 import { useToast } from "@/components/toast/ToastProvider";
 
 function scorePassword(pw: string) {
@@ -47,7 +48,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 h-9 w-9 rounded-xl bg-fg" />
+          <AdminHubMark className="mx-auto mb-4 h-11 w-11" />
           <h1 className="text-[22px] font-semibold tracking-tight">Skapa konto</h1>
           <p className="mt-1 text-sm text-muted">Kom igång på under en minut</p>
         </div>

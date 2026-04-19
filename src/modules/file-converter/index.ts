@@ -5,7 +5,7 @@ export const fileConverterModule: AdminModuleDefinition = {
   id: "file-converter",
   title: "Konvertera filer",
   shortTitle: "Konvertera",
-  description: "Filkonvertering med köhantering, bulkbatcher och konfigurationsdrivna verktyg.",
+  description: "Konvertera filer i batch, följ kön i realtid och återanvänd presets för återkommande jobb.",
   area: "business",
   href: "/convert-files",
   icon: FolderCog,
@@ -16,6 +16,6 @@ export const fileConverterModule: AdminModuleDefinition = {
   ],
   metrics: [
     { label: "Stöd", value: "13 flöden", hint: "JPG, PNG, WEBP, PDF, HEIC, SVG, ICO" },
-    { label: "Läge", value: "Batchkö", hint: "Byggt för att kunna växa med fler verktyg och flöden" },
+    { label: "Läge", value: "Batchkö", hint: "Staging, presets och historik i samma arbetsyta" },
   ],
 };

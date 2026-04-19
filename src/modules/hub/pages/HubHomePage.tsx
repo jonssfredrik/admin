@@ -18,7 +18,7 @@ export function HubHomePage() {
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <PageHeader
-          title="Hub"
+          title="Admin Hub"
           subtitle="Din samlade admin-panel för arbete, drift, ekonomi och personliga system."
         />
         <div className="hidden items-center gap-2 rounded-xl border bg-surface px-3 py-2 text-sm text-muted md:flex">
