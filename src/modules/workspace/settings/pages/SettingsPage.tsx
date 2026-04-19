@@ -4,7 +4,7 @@ import { SettingsTabs } from "@/modules/workspace/settings/components/SettingsTa
 export function SettingsPage() {
   return (
     <div className="space-y-8">
-      <PageHeader title="Settings" subtitle="Konfigurera din arbetsyta" />
+      <PageHeader title="Inställningar" subtitle="Konfigurera din arbetsyta" />
       <SettingsTabs />
     </div>
   );

@@ -1,0 +1,102 @@
+export interface FeedSource {
+  id: string;
+  name: string;
+  url: string;
+  type: "json" | "csv" | "rss";
+  tld: string;
+  status: "active" | "paused" | "error";
+  lastFetched: string;
+  domainsLastRun: number;
+  cadence: string;
+}
+
+export const feedSources: FeedSource[] = [
+  {
+    id: "iis-se",
+    name: "Internetstiftelsen (.se)",
+    url: "https://data.internetstiftelsen.se/expired/daily.json",
+    type: "json",
+    tld: ".se",
+    status: "active",
+    lastFetched: "2026-04-19 08:14",
+    domainsLastRun: 1248,
+    cadence: "Dagligen 08:00",
+  },
+  {
+    id: "iis-nu",
+    name: "Internetstiftelsen (.nu)",
+    url: "https://data.internetstiftelsen.se/expired/nu-daily.json",
+    type: "json",
+    tld: ".nu",
+    status: "active",
+    lastFetched: "2026-04-19 08:14",
+    domainsLastRun: 186,
+    cadence: "Dagligen 08:00",
+  },
+  {
+    id: "expired-global",
+    name: "ExpiredDomains Global",
+    url: "https://example.com/expired/global.csv",
+    type: "csv",
+    tld: "multi",
+    status: "paused",
+    lastFetched: "2026-04-17 11:40",
+    domainsLastRun: 3420,
+    cadence: "Var 6:e timme",
+  },
+  {
+    id: "snapnames",
+    name: "SnapNames Auctions",
+    url: "https://api.snapnames.example/auctions/feed.json",
+    type: "json",
+    tld: "multi",
+    status: "error",
+    lastFetched: "2026-04-18 22:00",
+    domainsLastRun: 0,
+    cadence: "Var timme",
+  },
+];
+
+export interface ReportEntry {
+  id: string;
+  title: string;
+  generatedAt: string;
+  domains: number;
+  highlight: string;
+  format: "pdf" | "csv" | "json";
+}
+
+export const reports: ReportEntry[] = [
+  {
+    id: "r-2026-04-19",
+    title: "Dagsrapport 19 april",
+    generatedAt: "2026-04-19 09:10",
+    domains: 1442,
+    highlight: "4 utmärkta kandidater",
+    format: "pdf",
+  },
+  {
+    id: "r-2026-04-18",
+    title: "Dagsrapport 18 april",
+    generatedAt: "2026-04-18 09:04",
+    domains: 1211,
+    highlight: "2 utmärkta kandidater",
+    format: "pdf",
+  },
+  {
+    id: "r-week-16",
+    title: "Veckorapport v.16",
+    generatedAt: "2026-04-14 18:00",
+    domains: 8742,
+    highlight: "Topp 20 genomgång",
+    format: "csv",
+  },
+  {
+    id: "r-nisch-tech",
+    title: "Nischrapport: tech/SaaS",
+    generatedAt: "2026-04-12 14:30",
+    domains: 412,
+    highlight: "18 uppföljning",
+    format: "json",
+  },
+];

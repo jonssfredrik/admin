@@ -1,0 +1,78 @@
+import type { ConversionHistoryBatch, ConversionPreset } from "@/modules/file-converter/types";
+
+export const conversionPresets: ConversionPreset[] = [
+  {
+    id: "web-performance-pack",
+    name: "Web Performance Pack",
+    description: "Optimerar vanliga webbassets till lättare format för publicering och CDN-flöden.",
+    toolIds: ["jpg-to-webp", "png-to-webp", "svg-to-png", "png-to-ico"],
+    concurrency: 6,
+    autoArchive: true,
+    target: "web-assets",
+  },
+  {
+    id: "document-rasterizer",
+    name: "Document Rasterizer",
+    description: "Renderar dokument till bildformat för preview, support och delning i bildflöden.",
+    toolIds: ["pdf-to-jpg", "pdf-to-png", "jpg-to-pdf", "png-to-pdf"],
+    concurrency: 2,
+    autoArchive: false,
+    target: "document-export",
+  },
+  {
+    id: "brand-delivery-kit",
+    name: "Brand Delivery Kit",
+    description: "Förbereder logotyper och grafik för leverans till kund eller partner.",
+    toolIds: ["svg-to-png", "png-to-jpg", "png-to-ico", "jpg-to-png"],
+    concurrency: 4,
+    autoArchive: true,
+    target: "brand-delivery",
+  },
+];
+
+export const conversionHistoryBatches: ConversionHistoryBatch[] = [
+  {
+    id: "batch-9f32ab",
+    label: "Aprilkampanj export",
+    startedAt: "2026-04-19T10:42:00",
+    totalFiles: 18,
+    completedFiles: 18,
+    runtimeLabel: "2 min 14 s",
+    status: "completed",
+    outputSummary: "16 WEBP, 2 ICO",
+    topToolIds: ["jpg-to-webp", "png-to-webp", "png-to-ico"],
+  },
+  {
+    id: "batch-a1ce72",
+    label: "Supportdokument till preview",
+    startedAt: "2026-04-19T09:18:00",
+    totalFiles: 7,
+    completedFiles: 7,
+    runtimeLabel: "1 min 03 s",
+    status: "completed",
+    outputSummary: "4 PNG, 3 JPG",
+    topToolIds: ["pdf-to-png", "pdf-to-jpg"],
+  },
+  {
+    id: "batch-c84de1",
+    label: "Mobila foton till CRM-import",
+    startedAt: "2026-04-18T16:07:00",
+    totalFiles: 24,
+    completedFiles: 19,
+    runtimeLabel: "Kör fortfarande",
+    status: "running",
+    outputSummary: "19 JPG klara, 5 återstår",
+    topToolIds: ["heic-to-jpg"],
+  },
+  {
+    id: "batch-f1820d",
+    label: "Leverans för brandpaket",
+    startedAt: "2026-04-18T11:26:00",
+    totalFiles: 11,
+    completedFiles: 9,
+    runtimeLabel: "3 min 21 s",
+    status: "partial",
+    outputSummary: "8 PNG, 1 ICO, 2 flaggade",
+    topToolIds: ["svg-to-png", "png-to-ico"],
+  },
+];

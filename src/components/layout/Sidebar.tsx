@@ -55,7 +55,7 @@ export function Sidebar() {
       <div className={clsx("flex h-14 items-center", collapsed ? "justify-center" : "justify-between px-4")}>
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-fg" />
+            <div className="h-6 w-6 rounded-md bg-fg text-italic">A</div>
             <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>
           </div>
         )}

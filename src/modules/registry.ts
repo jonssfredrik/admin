@@ -1,5 +1,6 @@
 import { billingModule } from "@/modules/billing";
-import { domainsModule } from "@/modules/domains";
+import { fileConverterModule } from "@/modules/file-converter";
 import { jetwpModule } from "@/modules/jetwp";
+import { snaptldModule } from "@/modules/snaptld";
 
-export const adminModules = [jetwpModule, domainsModule, billingModule];
+export const adminModules = [jetwpModule, snaptldModule, billingModule, fileConverterModule];
