@@ -9,6 +9,9 @@
   --fg: 10 10 10;
   --muted: 113 113 122;
   --accent: 10 10 10;
+  --scrollbar-track: 243 244 246;
+  --scrollbar-thumb: 212 212 216;
+  --scrollbar-thumb-hover: 161 161 170;
 }
 
 .dark {
@@ -18,6 +21,9 @@
   --fg: 245 245 247;
   --muted: 161 161 170;
   --accent: 245 245 247;
+  --scrollbar-track: 18 18 20;
+  --scrollbar-thumb: 63 63 70;
+  --scrollbar-thumb-hover: 82 82 91;
 }
 
 html, body {
@@ -29,4 +35,29 @@ html, body {
 
 * {
   border-color: rgb(var(--border));
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--scrollbar-thumb)) rgb(var(--scrollbar-track));
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgb(var(--scrollbar-track));
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb));
+  border: 3px solid rgb(var(--scrollbar-track));
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--scrollbar-thumb-hover));
+}
+
+*::-webkit-scrollbar-corner {
+  background: rgb(var(--scrollbar-track));
 }

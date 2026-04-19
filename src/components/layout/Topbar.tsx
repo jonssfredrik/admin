@@ -13,7 +13,7 @@ export function Topbar() {
         className="group flex w-full max-w-sm items-center gap-2 rounded-lg border bg-bg py-1.5 pl-3 pr-2 text-sm text-muted transition-colors hover:border-fg/20"
       >
         <Search size={15} />
-        <span className="flex-1 text-left">Sök eller kör kommando…</span>
+        <span className="flex-1 text-left">Sök eller kör kommando...</span>
         <kbd className="hidden items-center gap-0.5 rounded border bg-surface px-1.5 py-0.5 text-[10px] font-medium md:inline-flex">
           ⌘K
         </kbd>

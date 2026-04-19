@@ -3,127 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  LayoutDashboard,
-  Users,
-  BarChart3,
-  Settings,
-  PanelLeftClose,
-  PanelLeft,
-  HelpCircle,
-  ChevronRight,
-  Shield,
-  CreditCard,
-  Bell,
-  FileText,
-  Globe,
-  Server,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronRight, HelpCircle, PanelLeft, PanelLeftClose } from "lucide-react";
 import clsx from "clsx";
-
-interface SubItem {
-  href: string;
-  label: string;
-}
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  children?: SubItem[];
-}
-
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-const sections: NavSection[] = [
-  {
-    title: "Översikt",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      {
-        href: "/analytics",
-        label: "Analytics",
-        icon: BarChart3,
-        children: [
-          { href: "/analytics", label: "Översikt" },
-          { href: "/analytics#traffic", label: "Trafik" },
-          { href: "/analytics#sources", label: "Källor" },
-          { href: "/analytics#pages", label: "Topp-sidor" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Tjänster",
-    items: [
-      {
-        href: "/jetwp",
-        label: "JetWP",
-        icon: Server,
-        children: [
-          { href: "/jetwp", label: "Översikt" },
-          { href: "/jetwp/sites", label: "Sites" },
-          { href: "/jetwp/jobs", label: "Jobs" },
-          { href: "/jetwp/backups", label: "Backups" },
-          { href: "/jetwp/workflow", label: "Workflows" },
-          { href: "/jetwp/security", label: "Security" },
-          { href: "/jetwp/inventory", label: "Inventory" },
-          { href: "/jetwp/alerts", label: "Alerts" },
-          { href: "/jetwp/notifications", label: "Notifications" },
-          { href: "/jetwp/integrations", label: "Integrations" },
-          { href: "/jetwp/reports", label: "Reports" },
-          { href: "/jetwp/agents", label: "Agents" },
-          { href: "/jetwp/bulk-update", label: "Bulk update" },
-          { href: "/jetwp/staging", label: "Staging" },
-          { href: "/jetwp/access", label: "Access" },
-          { href: "/jetwp/activity", label: "Aktivitet" },
-          { href: "/jetwp/health", label: "Serverhälsa" },
-          { href: "/jetwp/onboarding", label: "Onboarding" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Hantera",
-    items: [
-      {
-        href: "/users",
-        label: "Users",
-        icon: Users,
-        children: [
-          { href: "/users", label: "Alla användare" },
-          { href: "/users#invites", label: "Inbjudningar" },
-          { href: "/users#roles", label: "Roller" },
-        ],
-      },
-      { href: "#", label: "Dokument", icon: FileText },
-      { href: "#", label: "Domäner", icon: Globe },
-    ],
-  },
-  {
-    title: "Konto",
-    items: [
-      {
-        href: "/settings",
-        label: "Settings",
-        icon: Settings,
-        children: [
-          { href: "/settings", label: "Profil" },
-          { href: "/settings#account", label: "Konto" },
-          { href: "/settings#billing", label: "Fakturering" },
-          { href: "/settings#notifications", label: "Notifikationer" },
-        ],
-      },
-      { href: "#", label: "Säkerhet", icon: Shield },
-      { href: "#", label: "Fakturering", icon: CreditCard },
-      { href: "#", label: "Notiser", icon: Bell },
-    ],
-  },
-];
+import { navigationSections } from "@/config/navigation";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -139,23 +21,23 @@ export function Sidebar() {
         setExpanded(JSON.parse(storedExp));
       } catch {}
     } else {
-      const init: Record<string, boolean> = {};
-      sections.forEach((s) =>
-        s.items.forEach((i) => {
-          if (i.children && pathname?.startsWith(i.href)) init[i.href] = true;
+      const initialExpanded: Record<string, boolean> = {};
+      navigationSections.forEach((section) =>
+        section.items.forEach((item) => {
+          if (item.children && pathname?.startsWith(item.href)) initialExpanded[item.href] = true;
         }),
       );
-      setExpanded(init);
+      setExpanded(initialExpanded);
     }
   }, [pathname]);
 
-  const toggle = () => {
+  const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem("sidebar:collapsed", next ? "1" : "0");
   };
 
-  const toggleExpand = (key: string) => {
+  const toggleExpanded = (key: string) => {
     setExpanded((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem("sidebar:expanded", JSON.stringify(next));
@@ -167,18 +49,18 @@ export function Sidebar() {
     <aside
       className={clsx(
         "hidden shrink-0 flex-col border-r bg-surface transition-[width] duration-200 md:flex",
-        collapsed ? "w-[60px]" : "w-60",
+        collapsed ? "w-[60px]" : "w-64",
       )}
     >
       <div className={clsx("flex h-14 items-center", collapsed ? "justify-center" : "justify-between px-4")}>
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="h-6 w-6 rounded-md bg-fg" />
-            <span className="text-[15px] font-semibold tracking-tight">Admin</span>
+            <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>
           </div>
         )}
         <button
-          onClick={toggle}
+          onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandera sidebar" : "Minimera sidebar"}
           className="rounded-md p-1.5 text-muted hover:bg-bg hover:text-fg"
         >
@@ -187,25 +69,25 @@ export function Sidebar() {
       </div>
 
       <nav className={clsx("flex-1 overflow-y-auto py-2", collapsed ? "px-2" : "px-3")}>
-        {sections.map((section, si) => (
-          <div key={section.title} className={si > 0 ? "mt-4" : ""}>
+        {navigationSections.map((section, sectionIndex) => (
+          <div key={section.id} className={sectionIndex > 0 ? "mt-4" : ""}>
             {!collapsed ? (
               <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted">
                 {section.title}
               </div>
             ) : (
-              si > 0 && <div className="my-2 h-px bg-border" />
+              sectionIndex > 0 && <div className="my-2 h-px bg-border" />
             )}
 
             <div className="flex flex-col gap-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const active = item.href !== "#" && pathname?.startsWith(item.href);
-                const isOpen = expanded[item.href];
+                const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
                 const hasChildren = !!item.children && !collapsed;
+                const isOpen = expanded[item.href];
 
                 return (
-                  <div key={`${section.title}-${item.label}`}>
+                  <div key={`${section.id}-${item.href}`}>
                     <div className="flex items-center">
                       <Link
                         href={item.href}
@@ -213,7 +95,7 @@ export function Sidebar() {
                         className={clsx(
                           "flex flex-1 items-center rounded-lg text-sm transition-colors",
                           collapsed ? "h-9 w-9 justify-center" : "gap-2.5 px-3 py-2",
-                          active ? "bg-bg text-fg font-medium" : "text-muted hover:bg-bg hover:text-fg",
+                          active ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg",
                         )}
                       >
                         <Icon size={16} strokeWidth={1.75} />
@@ -221,7 +103,7 @@ export function Sidebar() {
                       </Link>
                       {hasChildren && (
                         <button
-                          onClick={() => toggleExpand(item.href)}
+                          onClick={() => toggleExpanded(item.href)}
                           aria-label={isOpen ? "Fäll ihop" : "Expandera"}
                           className="ml-0.5 rounded-md p-1.5 text-muted hover:bg-bg hover:text-fg"
                         >
@@ -236,24 +118,18 @@ export function Sidebar() {
 
                     {hasChildren && isOpen && (
                       <div className="mt-0.5 ml-[22px] flex flex-col gap-0.5 border-l pl-3">
-                        {item.children!.map((child) => {
+                        {item.children?.map((child) => {
                           const [childPath, childHash] = child.href.split("#");
-                          const parentPath = item.href;
-                          const isParentRoot = childPath === parentPath;
                           const childActive = childHash
                             ? false
-                            : isParentRoot
-                              ? pathname === parentPath
-                              : pathname === childPath || pathname?.startsWith(childPath + "/");
+                            : pathname === childPath || pathname?.startsWith(`${childPath}/`);
                           return (
                             <Link
-                              key={child.href + child.label}
+                              key={`${item.href}-${child.href}`}
                               href={child.href}
                               className={clsx(
                                 "rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
-                                childActive
-                                  ? "bg-bg font-medium text-fg"
-                                  : "text-muted hover:bg-bg hover:text-fg",
+                                childActive ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg",
                               )}
                             >
                               {child.label}
@@ -272,7 +148,7 @@ export function Sidebar() {
 
       <div className={clsx("border-t", collapsed ? "p-2" : "p-3")}>
         <Link
-          href="#"
+          href="/settings"
           title={collapsed ? "Hjälp" : undefined}
           className={clsx(
             "flex items-center rounded-lg text-sm text-muted transition-colors hover:bg-bg hover:text-fg",
