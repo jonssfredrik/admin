@@ -102,7 +102,7 @@ export function BackupsTab({ siteId }: BackupsTabProps) {
                       <Download size={11} className="mr-1" />
                       Ladda ner
                     </button>
-                    <button onClick={() => setConfirmRestore(true)} className="inline-flex h-7 items-center rounded-md border bg-surface px-2 text-xs font-medium hover:bg-bg">
+                    <button onClick={() => { setSelectedBackup(backup); setConfirmRestore(true); }} className="inline-flex h-7 items-center rounded-md border bg-surface px-2 text-xs font-medium hover:bg-bg">
                       <RotateCcw size={11} className="mr-1" />
                       Återställ
                     </button>

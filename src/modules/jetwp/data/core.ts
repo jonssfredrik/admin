@@ -31,6 +31,10 @@ export interface Site {
   pendingJobs: number;
   failingJobs: number;
   securityUpdates: number;
+  cpuPct: number;
+  ramPct: number;
+  diskIoPct: number;
+  bandwidthPct: number;
 }
 
 export const sites: Site[] = [
@@ -64,6 +68,10 @@ export const sites: Site[] = [
     pendingJobs: 0,
     failingJobs: 0,
     securityUpdates: 0,
+    cpuPct: 18,
+    ramPct: 52,
+    diskIoPct: 12,
+    bandwidthPct: 35,
   },
   {
     id: "site-2",
@@ -95,6 +103,10 @@ export const sites: Site[] = [
     pendingJobs: 2,
     failingJobs: 1,
     securityUpdates: 2,
+    cpuPct: 64,
+    ramPct: 78,
+    diskIoPct: 45,
+    bandwidthPct: 72,
   },
   {
     id: "site-3",
@@ -126,6 +138,10 @@ export const sites: Site[] = [
     pendingJobs: 1,
     failingJobs: 0,
     securityUpdates: 0,
+    cpuPct: 41,
+    ramPct: 61,
+    diskIoPct: 28,
+    bandwidthPct: 58,
   },
   {
     id: "site-4",
@@ -157,6 +173,10 @@ export const sites: Site[] = [
     pendingJobs: 0,
     failingJobs: 0,
     securityUpdates: 0,
+    cpuPct: 8,
+    ramPct: 34,
+    diskIoPct: 6,
+    bandwidthPct: 15,
   },
   {
     id: "site-5",
@@ -188,5 +208,9 @@ export const sites: Site[] = [
     pendingJobs: 3,
     failingJobs: 2,
     securityUpdates: 1,
+    cpuPct: 0,
+    ramPct: 0,
+    diskIoPct: 0,
+    bandwidthPct: 0,
   },
 ];

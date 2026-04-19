@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Pause, Play, RefreshCw, Search } from "lucide-react";
+import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
@@ -13,13 +14,30 @@ interface PluginsTabProps {
   updatesAvailable: number;
 }
 
+type StatusFilter = "all" | "active" | "inactive" | "updates";
+
+const statusFilterLabels: Record<StatusFilter, string> = {
+  all: "Alla",
+  active: "Aktiva",
+  inactive: "Inaktiva",
+  updates: "Behöver uppdateras",
+};
+
 export function PluginsTab({ updatesAvailable }: PluginsTabProps) {
   const [list, setList] = useState<Plugin[]>(() => defaultPlugins(updatesAvailable));
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [updateAllOpen, setUpdateAllOpen] = useState(false);
   const toast = useToast();
 
-  const filtered = list.filter((plugin) => plugin.name.toLowerCase().includes(query.toLowerCase()) || plugin.author.toLowerCase().includes(query.toLowerCase()));
+  const filtered = list.filter((plugin) => {
+    const q = query.toLowerCase();
+    if (q && !plugin.name.toLowerCase().includes(q) && !plugin.author.toLowerCase().includes(q)) return false;
+    if (statusFilter === "active") return plugin.active;
+    if (statusFilter === "inactive") return !plugin.active;
+    if (statusFilter === "updates") return plugin.updateAvailable;
+    return true;
+  });
   const updateCount = list.filter((plugin) => plugin.updateAvailable).length;
 
   const toggle = (slug: string) => {
@@ -45,6 +63,17 @@ export function PluginsTab({ updatesAvailable }: PluginsTabProps) {
           <div className="relative min-w-[200px] flex-1">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input className="pl-9" placeholder="Sök plugin..." value={query} onChange={(event) => setQuery(event.target.value)} />
+          </div>
+          <div className="flex rounded-lg border bg-bg p-0.5">
+            {(Object.keys(statusFilterLabels) as StatusFilter[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                className={clsx("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", statusFilter === key ? "bg-surface text-fg shadow-soft" : "text-muted hover:text-fg")}
+              >
+                {statusFilterLabels[key]}
+              </button>
+            ))}
           </div>
           {updateCount > 0 && (
             <Button onClick={() => setUpdateAllOpen(true)}>

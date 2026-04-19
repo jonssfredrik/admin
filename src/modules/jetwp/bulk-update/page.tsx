@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FlaskConical, Play } from "lucide-react";
+import clsx from "clsx";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Table";
@@ -42,7 +43,7 @@ export default function BulkUpdatePage() {
         <div className="text-xs font-medium uppercase tracking-wider text-muted">Utrullningsstrategi</div>
         <div className="mt-2 flex gap-2">
           {(["canary", "serial", "parallel"] as const).map((item) => (
-            <button key={item} onClick={() => setStrategy(item)} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${strategy === item ? "bg-bg text-fg" : "text-muted"}`}>
+            <button key={item} onClick={() => setStrategy(item)} className={clsx("rounded-md border px-3 py-1.5 text-xs font-medium", strategy === item ? "bg-bg text-fg" : "text-muted")}>
               {strategyLabels[item]}
             </button>
           ))}

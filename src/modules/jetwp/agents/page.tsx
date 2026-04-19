@@ -4,6 +4,7 @@ import { Cpu, RefreshCw, Link2 } from "lucide-react";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { agentRecords } from "../extended-data";
+import { siteName } from "../data";
 import { useToast } from "@/components/toast/ToastProvider";
 import { JetWPPageIntro } from "@/modules/jetwp/components/JetWPPageIntro";
 
@@ -50,7 +51,7 @@ export default function AgentsPage() {
         <tbody>
           {agentRecords.map((agent) => (
             <tr key={agent.id}>
-              <Td>{agent.siteId}</Td>
+              <Td>{siteName(agent.siteId)}</Td>
               <Td className="font-mono text-[12px]">{agent.server}</Td>
               <Td className="font-mono text-[12px]">{agent.version} → {agent.desiredVersion}</Td>
               <Td><Badge tone={agent.status === "healthy" ? "success" : agent.status === "outdated" ? "warning" : "danger"}>{statusLabels[agent.status] ?? agent.status}</Badge></Td>

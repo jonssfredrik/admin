@@ -4,6 +4,7 @@ import { Copy, GitCompareArrows, Rocket } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { stagingFlows } from "../extended-data";
+import { siteName } from "../data";
 import { useToast } from "@/components/toast/ToastProvider";
 import { JetWPPageIntro } from "@/modules/jetwp/components/JetWPPageIntro";
 
@@ -17,25 +18,25 @@ export default function StagingPage() {
       <div className="grid gap-4 md:grid-cols-2">
         {stagingFlows.map((flow) => (
           <Card key={flow.siteId} className="p-5">
-            <div className="text-sm font-semibold">{flow.siteId}</div>
-            <div className="mt-1 text-xs text-muted">Last clone {flow.lastClone} · last promote {flow.lastPromote}</div>
+            <div className="text-sm font-semibold">{siteName(flow.siteId)}</div>
+            <div className="mt-1 text-xs text-muted">Senaste klon {flow.lastClone} · senaste driftsättning {flow.lastPromote}</div>
             <div className="mt-4 space-y-2">
               {flow.diffSummary.map((line) => (
                 <div key={line} className="rounded-lg border bg-bg/40 px-3 py-2 text-sm">{line}</div>
               ))}
             </div>
             <div className="mt-4 flex gap-2">
-              <Button variant="secondary" onClick={() => toast.success("Clone to staging queued", flow.siteId)}>
+              <Button variant="secondary" onClick={() => toast.success("Klon till testmiljö köad", siteName(flow.siteId))}>
                 <Copy size={13} className="mr-1.5" />
-                Clone
+                Klona
               </Button>
-              <Button variant="secondary" onClick={() => toast.info("Environment diff opened", flow.siteId)}>
+              <Button variant="secondary" onClick={() => toast.info("Miljöjämförelse öppnad", siteName(flow.siteId))}>
                 <GitCompareArrows size={13} className="mr-1.5" />
-                Diff
+                Jämför
               </Button>
-              <Button onClick={() => toast.success("Promote to production queued", flow.siteId)}>
+              <Button onClick={() => toast.success("Produktionsdriftsättning köad", siteName(flow.siteId))}>
                 <Rocket size={13} className="mr-1.5" />
-                Promote
+                Driftsätt
               </Button>
             </div>
           </Card>

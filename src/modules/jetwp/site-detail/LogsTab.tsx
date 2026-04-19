@@ -12,7 +12,7 @@ export function LogsTab() {
   const toast = useToast();
   const [level, setLevel] = useState<"all" | "info" | "warn" | "error">("all");
   const [source, setSource] = useState<"all" | "php" | "wp" | "access" | "cron" | "backup" | "security" | "cache" | "db">("all");
-  const [window, setWindow] = useState<"15m" | "1h" | "24h">("1h");
+  const [period, setPeriod] = useState<"15m" | "1h" | "24h">("1h");
 
   const accessLogs = [
     { id: "acc-1", level: "info" as const, time: "14:33:02", source: "access", message: 'GET / 200 132ms "Mozilla/5.0"' },
@@ -20,7 +20,15 @@ export function LogsTab() {
   ];
   const logs = [...baseLogs, ...accessLogs];
 
-  const filtered = logs.filter((entry) => (level === "all" || entry.level === level) && (source === "all" || entry.source === source));
+  const NOW_MINUTES = 14 * 60 + 35;
+  const periodMinutes: Record<typeof period, number> = { "15m": 15, "1h": 60, "24h": 1440 };
+
+  const filtered = logs.filter((entry) => {
+    if (level !== "all" && entry.level !== level) return false;
+    if (source !== "all" && entry.source !== source) return false;
+    const [h, m] = entry.time.split(":").map(Number);
+    return NOW_MINUTES - (h * 60 + m) <= periodMinutes[period];
+  });
   const levelStyles = {
     info: "bg-fg/5 text-muted",
     warn: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -56,8 +64,8 @@ export function LogsTab() {
             {(["15m", "1h", "24h"] as const).map((entry) => (
               <button
                 key={entry}
-                onClick={() => setWindow(entry)}
-                className={clsx("rounded-md px-3 py-1 text-xs font-medium transition-colors", window === entry ? "bg-surface text-fg shadow-soft" : "text-muted hover:text-fg")}
+                onClick={() => setPeriod(entry)}
+                className={clsx("rounded-md px-3 py-1 text-xs font-medium transition-colors", period === entry ? "bg-surface text-fg shadow-soft" : "text-muted hover:text-fg")}
               >
                 {entry}
               </button>
@@ -71,7 +79,7 @@ export function LogsTab() {
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="border-b px-4 py-3 text-sm font-medium">Visar {filtered.length} rader · tidsfönster {window}</div>
+        <div className="border-b px-4 py-3 text-sm font-medium">Visar {filtered.length} rader · tidsfönster {period}</div>
         <div className="divide-y divide-border/60 font-mono text-[12px]">
           {filtered.map((entry) => (
             <div key={entry.id} className="flex items-start gap-3 px-4 py-2.5 hover:bg-bg/50">

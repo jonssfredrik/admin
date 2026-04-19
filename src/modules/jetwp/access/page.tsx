@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Table";
 import { siteMemberships } from "../extended-data";
+import { siteName } from "../data";
 import { useToast } from "@/components/toast/ToastProvider";
 import { JetWPPageIntro } from "@/modules/jetwp/components/JetWPPageIntro";
 
@@ -40,7 +41,7 @@ export default function AccessPage() {
       <div className="space-y-4">
         {siteMemberships.map((membership) => (
           <Card key={membership.siteId} className="p-5">
-            <div className="text-sm font-semibold">{membership.siteId}</div>
+            <div className="text-sm font-semibold">{siteName(membership.siteId)}</div>
             <div className="mt-3 space-y-2">
               {membership.members.map((member) => (
                 <div key={member.email} className="flex items-center justify-between gap-3 rounded-lg border bg-bg/40 px-3 py-2">

@@ -133,6 +133,7 @@ export function InventoryPage() {
 
 function InventoryCard({ item, onQueueUpdate }: { item: InventoryItem; onQueueUpdate: (targets: string[]) => void }) {
   const router = useRouter();
+  const toast = useToast();
   const targets = item.installed.filter((entry) => entry.updateAvailable).map((entry) => entry.siteId);
 
   return (
@@ -152,7 +153,7 @@ function InventoryCard({ item, onQueueUpdate }: { item: InventoryItem; onQueueUp
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => router.push("/jetwp/bulk-update")}>
+          <Button variant="secondary" onClick={() => toast.info(`${item.name} ${item.latestVersion}`, "Kompatibilitetsförbättringar, säkrare cachehantering och adminpolish.")}>
             <FileText size={13} className="mr-1.5" />
             Ändringslogg
           </Button>
