@@ -159,7 +159,7 @@ export function Sidebar() {
         )}
       >
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-black p-2">
+          <div className="pl-2 mt-[-0.2rem]">
             <AdminHubMark className="h-[22px] w-[22px] shrink-0" />
           </div>
           {!collapsed && <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>}
