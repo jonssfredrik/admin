@@ -5,12 +5,9 @@ import Link from "next/link";
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
-  Clock3,
   Copy,
   Download,
   FileArchive,
-  FileCog,
   FileImage,
   Filter,
   Layers3,
@@ -111,7 +108,6 @@ export function FileConverterPage() {
   const [category, setCategory] = useState<ConversionToolDefinition["category"] | "all">("all");
   const [isDragging, setIsDragging] = useState(false);
   const [selectedStageIds, setSelectedStageIds] = useState<Set<string>>(new Set());
-  const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const workspace = useFileConverterWorkspace();
   const parallelism = workspace.parallelism;
   const activity = useConversionQueueEngine(parallelism);
@@ -119,6 +115,7 @@ export function FileConverterPage() {
   const stagedFiles = workspace.stagedFiles;
 
   const toolMap = useMemo(() => new Map(conversionTools.map((tool) => [tool.id, tool])), []);
+  const queueItemMap = useMemo(() => new Map(queueItems.map((item) => [item.id, item])), [queueItems]);
 
   const filteredTools = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -144,14 +141,18 @@ export function FileConverterPage() {
   }, [queueItems]);
 
   const availableToQueue = stagedFiles.filter(
-    (file) => file.extension && file.selectedToolId && file.compatibleToolIds.includes(file.selectedToolId),
+    (file) =>
+      !file.queueItemId &&
+      file.extension &&
+      file.selectedToolId &&
+      file.compatibleToolIds.includes(file.selectedToolId),
   );
-  const unsupportedFiles = stagedFiles.filter((file) => file.compatibleToolIds.length === 0);
+  const unsupportedFiles = stagedFiles.filter((file) => !file.queueItemId && file.compatibleToolIds.length === 0);
   const supportedSelectedFiles = stagedFiles.filter(
-    (file) => selectedStageIds.has(file.id) && file.compatibleToolIds.length > 0,
+    (file) => selectedStageIds.has(file.id) && !file.queueItemId && file.compatibleToolIds.length > 0,
   );
   const selectedUnsupportedCount = stagedFiles.filter(
-    (file) => selectedStageIds.has(file.id) && file.compatibleToolIds.length === 0,
+    (file) => selectedStageIds.has(file.id) && !file.queueItemId && file.compatibleToolIds.length === 0,
   ).length;
 
   const commonToolIds = useMemo(() => {
@@ -166,32 +167,16 @@ export function FileConverterPage() {
 
   const selectedCount = selectedStageIds.size;
   const selectedReadyCount = supportedSelectedFiles.filter(
-    (file) => !!file.extension && !!file.selectedToolId && file.compatibleToolIds.includes(file.selectedToolId),
+    (file) =>
+      !!file.extension &&
+      !!file.selectedToolId &&
+      !file.queueItemId &&
+      file.compatibleToolIds.includes(file.selectedToolId),
   ).length;
   const allStagedSelected = stagedFiles.length > 0 && selectedCount === stagedFiles.length;
-
-  const completedItems = useMemo(
-    () =>
-      [...queueItems]
-        .filter((item) => item.status === "completed")
-        .sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0)),
-    [queueItems],
-  );
-  const resultItems = completedItems.slice(0, 8);
-  const selectedResults = resultItems.filter((item) => selectedResultIds.has(item.id));
-  const allResultItemsSelected = resultItems.length > 0 && selectedResults.length === resultItems.length;
   const stagedFormats = useMemo(
     () => new Set(stagedFiles.map((file) => file.extension).filter((format): format is FileFormat => !!format)),
     [stagedFiles],
-  );
-
-  const activeQueueItems = useMemo(
-    () =>
-      [...queueItems]
-        .filter((item) => item.status !== "completed")
-        .sort((left, right) => left.createdAt - right.createdAt)
-        .slice(0, 3),
-    [queueItems],
   );
 
   const batchSummary = useMemo(() => {
@@ -244,14 +229,6 @@ export function FileConverterPage() {
       return next.size === current.size ? current : next;
     });
   }, [stagedFiles]);
-
-  useEffect(() => {
-    setSelectedResultIds((current) => {
-      const validIds = new Set(resultItems.map((item) => item.id));
-      const next = new Set([...current].filter((id) => validIds.has(id)));
-      return next.size === current.size ? current : next;
-    });
-  }, [resultItems]);
 
   function openPicker() {
     inputRef.current?.click();
@@ -334,6 +311,10 @@ export function FileConverterPage() {
   }
 
   function removeStaged(fileId: string) {
+    const currentFile = stagedFiles.find((file) => file.id === fileId);
+    if (currentFile?.queueItemId) {
+      activity.replaceQueueItems((current) => current.filter((item) => item.id !== currentFile.queueItemId));
+    }
     workspace.setStagedFiles((current) => current.filter((file) => file.id !== fileId));
   }
 
@@ -360,7 +341,7 @@ export function FileConverterPage() {
     let updated = 0;
     workspace.setStagedFiles((current) =>
       current.map((file) => {
-        if (!selectedStageIds.has(file.id) || !file.compatibleToolIds.includes(toolId)) return file;
+        if (!selectedStageIds.has(file.id) || !!file.queueItemId || !file.compatibleToolIds.includes(toolId)) return file;
         updated += 1;
         const nextFile: StagedFile = {
           ...file,
@@ -381,6 +362,17 @@ export function FileConverterPage() {
   function removeSelectedStaged() {
     const count = selectedStageIds.size;
     if (count === 0) return;
+
+    const linkedQueueIds = stagedFiles
+      .filter((file) => selectedStageIds.has(file.id))
+      .map((file) => file.queueItemId)
+      .filter((queueItemId): queueItemId is string => !!queueItemId);
+
+    if (linkedQueueIds.length > 0) {
+      const linkedSet = new Set(linkedQueueIds);
+      activity.replaceQueueItems((current) => current.filter((item) => !linkedSet.has(item.id)));
+    }
+
     workspace.setStagedFiles((current) => current.filter((file) => !selectedStageIds.has(file.id)));
     setSelectedStageIds(new Set());
     toast.info(count === 1 ? "1 fil togs bort" : `${count} filer togs bort`);
@@ -389,35 +381,51 @@ export function FileConverterPage() {
   function queueBatch() {
     const convertible = stagedFiles.filter(
       (file): file is StagedFile & { extension: FileFormat; selectedToolId: string } =>
-        !!file.extension && !!file.selectedToolId && file.compatibleToolIds.includes(file.selectedToolId),
+        !file.queueItemId &&
+        !!file.extension &&
+        !!file.selectedToolId &&
+        file.compatibleToolIds.includes(file.selectedToolId),
     );
     if (convertible.length === 0) return;
 
     const batchId = makeId("batch");
     const createdAt = Date.now();
+    const queuedByFileId = new Map<string, QueueItem>();
+
     const nextItems = convertible.flatMap((file) => {
       const tool = toolMap.get(file.selectedToolId);
       if (!tool) return [];
-      return [
-        {
-          id: makeId("queue"),
-          batchId,
-          batchConcurrency: parallelism,
-          fileName: file.name,
-          size: file.size,
-          sourceFormat: file.extension,
-          toolId: tool.id,
-          status: "queued",
-          progress: 0,
-          createdAt,
-          durationMs: estimateDuration(file.size, tool),
-          resultName: buildResultName(file.name, tool.outputFormat),
-        } satisfies QueueItem,
-      ];
+      const nextItem: QueueItem = {
+        id: makeId("queue"),
+        batchId,
+        batchConcurrency: parallelism,
+        fileName: file.name,
+        size: file.size,
+        sourceFormat: file.extension,
+        toolId: tool.id,
+        status: "queued",
+        progress: 0,
+        createdAt,
+        durationMs: estimateDuration(file.size, tool),
+        resultName: buildResultName(file.name, tool.outputFormat),
+      };
+      queuedByFileId.set(file.id, nextItem);
+      return [nextItem];
     });
 
     activity.replaceQueueItems((current) => [...nextItems, ...current]);
-    workspace.setStagedFiles((current) => current.filter((file) => !convertible.some((item) => item.id === file.id)));
+    workspace.setStagedFiles((current) =>
+      current.map((file) => {
+        const queuedItem = queuedByFileId.get(file.id);
+        if (!queuedItem) return file;
+        const nextFile: StagedFile = {
+          ...file,
+          queueItemId: queuedItem.id,
+        };
+        return nextFile;
+      }),
+    );
+    setSelectedStageIds(new Set());
     toast.success(
       convertible.length === 1 ? "Batch startad med 1 fil" : `Batch startad med ${convertible.length} filer`,
       `${parallelism} parallella jobb • Batch ${batchId.slice(-6)}`,
@@ -431,44 +439,6 @@ export function FileConverterPage() {
 
   function downloadResult(resultName: string) {
     toast.success("Export förberedd", resultName);
-  }
-
-  function downloadSelectedResults() {
-    if (selectedResults.length === 0) return;
-    toast.success(
-      selectedResults.length === 1 ? "1 export förbereds" : `${selectedResults.length} exporter förbereds`,
-    );
-  }
-
-  function downloadAllResults() {
-    if (completedItems.length === 0) return;
-    toast.success(
-      completedItems.length === 1 ? "1 export förbereds" : `${completedItems.length} exporter förbereds`,
-    );
-  }
-
-  function copySelectedResultNames() {
-    if (selectedResults.length === 0) return;
-    void navigator.clipboard.writeText(selectedResults.map((item) => item.resultName).join("\n"));
-    toast.success(
-      selectedResults.length === 1 ? "1 filnamn kopierat" : `${selectedResults.length} filnamn kopierade`,
-    );
-  }
-
-  function toggleResultSelection(itemId: string) {
-    setSelectedResultIds((current) => {
-      const next = new Set(current);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }
-
-  function toggleSelectAllResults() {
-    setSelectedResultIds((current) => {
-      if (resultItems.length > 0 && current.size === resultItems.length) return new Set();
-      return new Set(resultItems.map((item) => item.id));
-    });
   }
 
   function pauseItem(itemId: string) {
@@ -514,11 +484,6 @@ export function FileConverterPage() {
     toast.info("Jobb avbrutet");
   }
 
-  function removeItem(itemId: string) {
-    activity.replaceQueueItems((current) => current.filter((item) => item.id !== itemId));
-    toast.info("Jobb borttaget från listan");
-  }
-
   function retryItem(itemId: string) {
     activity.replaceQueueItems((current) =>
       current.map((item) =>
@@ -538,14 +503,13 @@ export function FileConverterPage() {
   }
 
   const totalStagedSize = stagedFiles.reduce((sum, file) => sum + file.size, 0);
-  const activeCapacityHint = `${queueSummary.running}/${parallelism} parallella jobb`;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <PageHeader
           title="Konvertera filer"
-          subtitle="Samla filer i staging, välj rätt utdataformat och kör batcher med tydlig kö, resultat och historik."
+          subtitle="Samla filer i staging, välj rätt utdataformat och följ samma rad från väntar till färdig export."
         />
         <div className="flex flex-wrap gap-2">
           <Link
@@ -583,7 +547,7 @@ export function FileConverterPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard label="Tillgängliga flöden" value={String(conversionTools.length)} hint="Bild, dokument och ikonformat i samma verktyg." />
         <StatCard label="Filer i staging" value={String(stagedFiles.length)} hint={totalStagedSize ? formatBytes(totalStagedSize) : workspace.hydrated ? "Ingen fil inlagd" : "Laddar arbetsyta..."} />
-        <StatCard label="Exporter klara" value={String(queueSummary.completed)} hint={queueSummary.canceled > 0 ? `${queueSummary.canceled} avbrutna jobb i kön` : "Klara filer med snabb nedladdning."} />
+        <StatCard label="Exporter klara" value={String(queueSummary.completed)} hint={queueSummary.canceled > 0 ? `${queueSummary.canceled} avbrutna jobb i kön` : "Klara filer med nedladdning direkt på raden."} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.9fr]">
@@ -596,7 +560,7 @@ export function FileConverterPage() {
                   Arbetsyta
                 </div>
                 <p className="mt-1 text-sm text-muted">
-                  Lägg till filer, kontrollera matchning och starta batchen utan att lämna samma arbetsyta.
+                  Lägg till filer, kontrollera matchning och låt samma rad visa väntar, körs och färdig export.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -745,11 +709,11 @@ export function FileConverterPage() {
             </div>
           )}
 
-          <div className="px-5 py-4">
+          <div className="border-b px-5 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold tracking-tight">Staginglista</div>
-                <div className="mt-1 text-sm text-muted">Lägg till filer, kontrollera matchning och finjustera verktyg innan batchen körs.</div>
+                <div className="mt-1 text-sm text-muted">Samma rad går från väntar till klar export. Nedladdning och omkörning sker direkt på raden.</div>
               </div>
               <div className="text-sm text-muted">{totalStagedSize > 0 ? formatBytes(totalStagedSize) : "Ingen storlek än"}</div>
             </div>
@@ -767,10 +731,10 @@ export function FileConverterPage() {
                   />
                 </Th>
                 <Th>Fil</Th>
-                <Th>Storlek</Th>
-                <Th>Matchning</Th>
+                <Th>Status</Th>
                 <Th>Verktyg</Th>
-                <Th className="text-right">Åtgärd</Th>
+                <Th>Output</Th>
+                <Th className="text-right">Åtgärder</Th>
               </tr>
             </thead>
             <tbody>
@@ -799,257 +763,183 @@ export function FileConverterPage() {
                   </Td>
                 </tr>
               )}
-              {stagedFiles.map((file) => (
-                <tr
-                  key={file.id}
-                  className={clsx(
-                    "transition-colors hover:bg-bg/50",
-                    selectedStageIds.has(file.id) && "bg-fg/[0.03]",
-                    file.compatibleToolIds.length === 0 && "bg-amber-500/[0.04]",
-                  )}
-                >
-                  <Td className="pr-0">
-                    <Checkbox checked={selectedStageIds.has(file.id)} onChange={() => toggleStageSelection(file.id)} ariaLabel={`Välj ${file.name}`} />
-                  </Td>
-                  <Td>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg">
-                        <FileImage size={16} className="text-muted" />
+              {stagedFiles.map((file) => {
+                const queueItem = file.queueItemId ? queueItemMap.get(file.queueItemId) : undefined;
+                const tool = file.selectedToolId ? toolMap.get(file.selectedToolId) : queueItem ? toolMap.get(queueItem.toolId) : undefined;
+                const outputName = queueItem?.resultName ?? (tool && file.extension ? buildResultName(file.name, tool.outputFormat) : "Ingen output ännu");
+                const statusTone =
+                  queueItem?.status === "completed"
+                    ? "success"
+                    : queueItem?.status === "running" || queueItem?.status === "paused"
+                      ? "warning"
+                      : queueItem?.status === "canceled"
+                        ? "danger"
+                        : file.compatibleToolIds.length > 0
+                          ? "neutral"
+                          : "danger";
+                const statusLabel =
+                  queueItem?.status === "completed"
+                    ? "Klar"
+                    : queueItem?.status === "running"
+                      ? "Körs"
+                      : queueItem?.status === "paused"
+                        ? "Pausad"
+                        : queueItem?.status === "canceled"
+                          ? "Avbruten"
+                          : file.compatibleToolIds.length > 0
+                            ? "Redo"
+                            : "Ingen matchning";
+
+                return (
+                  <tr
+                    key={file.id}
+                    className={clsx(
+                      "transition-colors hover:bg-bg/50",
+                      selectedStageIds.has(file.id) && "bg-fg/[0.03]",
+                      !queueItem && file.compatibleToolIds.length === 0 && "bg-amber-500/[0.04]",
+                    )}
+                  >
+                    <Td className="pr-0">
+                      <Checkbox checked={selectedStageIds.has(file.id)} onChange={() => toggleStageSelection(file.id)} ariaLabel={`Välj ${file.name}`} />
+                    </Td>
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg">
+                          <FileImage size={16} className="text-muted" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium">{file.name}</div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
+                            <span>{file.extension ? formatLabel(file.extension) : "Okänd filtyp"}</span>
+                            <span>{formatBytes(file.size)}</span>
+                          </div>
+                          {queueItem && (
+                            <div className="mt-3">
+                              <div className="h-2 overflow-hidden rounded-full bg-surface">
+                                <div
+                                  className={clsx(
+                                    "h-full rounded-full transition-all",
+                                    queueItem.status === "completed"
+                                      ? "bg-emerald-500"
+                                      : queueItem.status === "canceled"
+                                        ? "bg-red-500"
+                                        : queueItem.status === "paused"
+                                          ? "bg-amber-500"
+                                          : "bg-fg",
+                                  )}
+                                  style={{ width: `${queueItem.progress}%` }}
+                                />
+                              </div>
+                              <div className="mt-2 text-xs text-muted">
+                                {queueItem.status === "completed"
+                                  ? `Klar på ${formatDuration((queueItem.completedAt ?? queueItem.createdAt) - queueItem.createdAt)}`
+                                  : queueItem.status === "canceled"
+                                    ? "Avbruten innan export"
+                                    : queueItem.status === "paused"
+                                      ? `${queueItem.progress}% • väntar på återupptagning`
+                                      : `${queueItem.progress}%`}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-medium">{file.name}</div>
-                        <div className="text-xs text-muted">{file.extension ? formatLabel(file.extension) : "Okänd filtyp"}</div>
-                      </div>
-                    </div>
-                  </Td>
-                  <Td className="font-mono text-xs">{formatBytes(file.size)}</Td>
-                  <Td>
-                    <Badge tone={file.compatibleToolIds.length > 0 ? "success" : "danger"}>
-                      {file.compatibleToolIds.length > 0 ? `${file.compatibleToolIds.length} kompatibla` : "Ingen matchning"}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    <select
-                      value={file.selectedToolId ?? ""}
-                      onChange={(event) => assignTool(file.id, event.target.value)}
-                      disabled={file.compatibleToolIds.length === 0}
-                      className="h-9 w-full min-w-[180px] rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5 disabled:text-muted"
-                    >
-                      {file.compatibleToolIds.length === 0 ? (
-                        <option value="">Inget verktyg</option>
+                    </Td>
+                    <Td>
+                      <Badge tone={statusTone}>{statusLabel}</Badge>
+                    </Td>
+                    <Td>
+                      {queueItem ? (
+                        <div className="text-sm">
+                          <div className="font-medium">{tool?.title ?? queueItem.toolId}</div>
+                          <div className="mt-1 text-xs text-muted">
+                            {formatLabel(queueItem.sourceFormat)} till {tool ? formatLabel(tool.outputFormat) : "?"}
+                          </div>
+                        </div>
+                      ) : file.compatibleToolIds.length > 0 ? (
+                        <select
+                          value={file.selectedToolId ?? ""}
+                          onChange={(event) => assignTool(file.id, event.target.value)}
+                          className="h-9 w-full min-w-[180px] rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
+                        >
+                          {file.compatibleToolIds.map((toolId) => (
+                            <option key={toolId} value={toolId}>
+                              {toolMap.get(toolId)?.title}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
-                        file.compatibleToolIds.map((toolId) => (
-                          <option key={toolId} value={toolId}>
-                            {toolMap.get(toolId)?.title}
-                          </option>
-                        ))
+                        <div className="text-sm text-muted">Ingen kompatibel konvertering</div>
                       )}
-                    </select>
-                  </Td>
-                  <Td className="text-right">
-                    <div className="space-y-1">
-                      <Button variant="ghost" onClick={() => removeStaged(file.id)}>
-                        Ta bort
-                      </Button>
-                      {file.compatibleToolIds.length === 0 && (
-                        <div className="text-xs text-muted">Byt till ett stödd format för att kunna köa filen.</div>
-                      )}
-                    </div>
-                  </Td>
-                </tr>
-              ))}
+                    </Td>
+                    <Td>
+                      <div className="text-sm">
+                        <div className="font-medium">{outputName}</div>
+                        <div className="mt-1 text-xs text-muted">
+                          {queueItem?.status === "completed"
+                            ? "Redo för nedladdning"
+                            : queueItem
+                              ? "Resultatet blir aktivt när jobbet är klart"
+                              : tool
+                                ? "Visar planerat filnamn"
+                                : "Saknar målformat"}
+                        </div>
+                      </div>
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {queueItem?.status === "completed" && (
+                          <>
+                            <button
+                              onClick={() => copyResultName(queueItem.resultName)}
+                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                              aria-label={`Kopiera ${queueItem.resultName}`}
+                            >
+                              <Copy size={14} />
+                            </button>
+                            <button
+                              onClick={() => downloadResult(queueItem.resultName)}
+                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                              aria-label={`Ladda ned ${queueItem.resultName}`}
+                            >
+                              <Download size={14} />
+                            </button>
+                            <button
+                              onClick={() => retryItem(queueItem.id)}
+                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
+                              aria-label={`Kör om ${queueItem.resultName}`}
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          </>
+                        )}
+                        {queueItem && queueItem.status !== "completed" && (
+                          <RowMenu
+                            items={[
+                              ...(queueItem.status === "running" ? [{ label: "Pausa jobb", icon: Pause, onClick: () => pauseItem(queueItem.id) }] : []),
+                              ...(queueItem.status === "paused" ? [{ label: "Återuppta jobb", icon: Play, onClick: () => resumeItem(queueItem.id) }] : []),
+                              ...(queueItem.status === "queued" || queueItem.status === "running" || queueItem.status === "paused"
+                                ? [{ label: "Avbryt jobb", icon: XCircle, danger: true, onClick: () => cancelItem(queueItem.id) }]
+                                : []),
+                              { divider: true },
+                              { label: "Ta bort rad", icon: Trash2, danger: true, onClick: () => removeStaged(file.id) },
+                            ]}
+                          />
+                        )}
+                        {!queueItem && (
+                          <Button variant="ghost" onClick={() => removeStaged(file.id)}>
+                            Ta bort
+                          </Button>
+                        )}
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         </Card>
 
         <div className="space-y-4">
-          <Card className="p-0">
-            <div className="border-b p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold tracking-tight">Resultat och nedladdning</div>
-                  <div className="mt-1 text-sm text-muted">Klara exporter samlade högst upp med tydliga bulk-actions.</div>
-                </div>
-                <Badge tone={completedItems.length > 0 ? "success" : "neutral"}>{completedItems.length} klara</Badge>
-              </div>
-            </div>
-
-            <div className="border-b p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold tracking-tight">Aktiv kö</div>
-                  <div className="mt-1 text-sm text-muted">Visar max tre pågående jobb åt gången. När ett jobb blir klart lyfts nästa fram automatiskt.</div>
-                </div>
-                <Badge tone={activeQueueItems.length > 0 ? "warning" : "neutral"}>
-                  {activeQueueItems.length > 0 ? `${activeQueueItems.length} visas` : "Ingen aktiv kö"}
-                </Badge>
-              </div>
-              <div className="mt-4 space-y-3 overflow-hidden">
-                {activeQueueItems.length === 0 && (
-                  <div className="rounded-2xl border bg-bg/40 p-4 text-sm text-muted">
-                    Inga aktiva jobb just nu. Batcher som körs eller väntar visas här direkt.
-                  </div>
-                )}
-                {activeQueueItems.map((item) => {
-                  const tool = toolMap.get(item.toolId);
-                  return (
-                    <div key={item.id} className="rounded-2xl border bg-bg/30 p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface">
-                              <FileCog size={15} className="text-muted" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium">{item.fileName}</div>
-                              <div className="text-xs text-muted">{tool?.title}</div>
-                            </div>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-                            <span className="rounded-full border bg-surface px-2 py-1">
-                              {formatLabel(item.sourceFormat)} till {tool ? formatLabel(tool.outputFormat) : "?"}
-                            </span>
-                            <span className="rounded-full border bg-surface px-2 py-1">{formatBytes(item.size)}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 self-start">
-                          <Badge
-                            tone={
-                              item.status === "running" || item.status === "paused"
-                                ? "warning"
-                                : item.status === "canceled"
-                                  ? "danger"
-                                  : "neutral"
-                            }
-                          >
-                            {item.status === "running" ? "Körs" : item.status === "paused" ? "Pausad" : item.status === "canceled" ? "Avbruten" : "I kö"}
-                          </Badge>
-                          <RowMenu
-                            items={[
-                              ...(item.status === "running" ? [{ label: "Pausa jobb", icon: Pause, onClick: () => pauseItem(item.id) }] : []),
-                              ...(item.status === "paused" ? [{ label: "Återuppta jobb", icon: Play, onClick: () => resumeItem(item.id) }] : []),
-                              ...(item.status === "queued" || item.status === "running" || item.status === "paused"
-                                ? [{ label: "Avbryt jobb", icon: XCircle, danger: true, onClick: () => cancelItem(item.id) }]
-                                : []),
-                              { divider: true },
-                              { label: "Ta bort från listan", icon: Trash2, danger: true, onClick: () => removeItem(item.id) },
-                            ]}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
-                        <div
-                          className={clsx(
-                            "h-full rounded-full transition-all",
-                            item.status === "canceled" ? "bg-red-500" : item.status === "paused" ? "bg-amber-500" : "bg-fg",
-                          )}
-                          style={{ width: `${item.progress}%` }}
-                        />
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                        <span>
-                          {item.status === "canceled"
-                            ? "Avbruten innan export"
-                            : item.status === "paused"
-                              ? `${item.progress}% • väntar på återupptagning`
-                              : `${item.progress}%`}
-                        </span>
-                        <span>{item.resultName}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={downloadAllResults} disabled={completedItems.length === 0}>
-                  <Download size={14} strokeWidth={2} className="mr-1.5" />
-                  Ladda ned alla klara
-                </Button>
-                <Button variant="secondary" onClick={downloadSelectedResults} disabled={selectedResults.length === 0}>
-                  <Download size={14} strokeWidth={2} className="mr-1.5" />
-                  Ladda ned valda
-                </Button>
-                <Button variant="secondary" onClick={copySelectedResultNames} disabled={selectedResults.length === 0}>
-                  <Copy size={14} strokeWidth={2} className="mr-1.5" />
-                  Kopiera valda namn
-                </Button>
-              </div>
-            </div>
-
-            <Table className="rounded-none border-0 shadow-none">
-              <thead>
-                <tr>
-                  <Th className="w-8 pr-0">
-                    <Checkbox
-                      checked={allResultItemsSelected}
-                      indeterminate={selectedResults.length > 0 && !allResultItemsSelected}
-                      onChange={toggleSelectAllResults}
-                      ariaLabel="Markera alla resultat"
-                    />
-                  </Th>
-                  <Th>Output</Th>
-                  <Th>Status</Th>
-                  <Th className="text-right">Åtgärder</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {resultItems.length === 0 && (
-                  <tr>
-                    <Td colSpan={4} className="py-10 text-center text-sm text-muted">
-                      Inga exporter klara ännu. När en batch blir färdig syns resultaten här direkt.
-                    </Td>
-                  </tr>
-                )}
-                {resultItems.map((item) => (
-                  <tr key={item.id} className={clsx("transition-colors hover:bg-bg/50", selectedResultIds.has(item.id) && "bg-fg/[0.03]")}>
-                    <Td className="pr-0">
-                      <Checkbox checked={selectedResultIds.has(item.id)} onChange={() => toggleResultSelection(item.id)} ariaLabel={`Välj ${item.resultName}`} />
-                    </Td>
-                    <Td>
-                      <div className="font-medium">{item.resultName}</div>
-                      <div className="mt-1 text-xs text-muted">
-                        {new Date(item.completedAt ?? item.createdAt).toLocaleTimeString("sv-SE", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </Td>
-                    <Td>
-                      <Badge tone="success">Klar</Badge>
-                    </Td>
-                    <Td className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => copyResultName(item.resultName)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Kopiera ${item.resultName}`}
-                        >
-                          <Copy size={14} />
-                        </button>
-                        <button
-                          onClick={() => downloadResult(item.resultName)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Ladda ned ${item.resultName}`}
-                        >
-                          <Download size={14} />
-                        </button>
-                        <button
-                          onClick={() => retryItem(item.id)}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg hover:text-fg"
-                          aria-label={`Kör om ${item.resultName}`}
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Card>
-
           <Card className="p-0">
             <div className="border-b p-5">
               <div className="text-sm font-semibold tracking-tight">Senaste batcher</div>
@@ -1090,68 +980,65 @@ export function FileConverterPage() {
               ))}
             </div>
           </Card>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card id="catalog" className="p-0">
-          <div className="border-b p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="text-sm font-semibold tracking-tight">Verktygskatalog</div>
-                <div className="mt-1 text-sm text-muted">Se snabbt vilka format som stöds och vilket utdataformat varje flöde ger.</div>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-                <div className="relative min-w-[220px]">
-                  <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Sök format eller verktyg..." className="pl-9" />
+          <Card id="catalog" className="p-0">
+            <div className="border-b p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold tracking-tight">Verktygskatalog</div>
+                  <div className="mt-1 text-sm text-muted">Se snabbt vilka format som stöds och vilket utdataformat varje flöde ger.</div>
                 </div>
-                <select
-                  value={category}
-                  onChange={(event) => setCategory(event.target.value as ConversionToolDefinition["category"] | "all")}
-                  className="h-9 rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
-                >
-                  <option value="all">Alla kategorier</option>
-                  <option value="image">Bild</option>
-                  <option value="document">Dokument</option>
-                  <option value="icon">Ikon</option>
-                </select>
+                <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                  <div className="relative min-w-[220px]">
+                    <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                    <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Sök format eller verktyg..." className="pl-9" />
+                  </div>
+                  <select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value as ConversionToolDefinition["category"] | "all")}
+                    className="h-9 rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
+                  >
+                    <option value="all">Alla kategorier</option>
+                    <option value="image">Bild</option>
+                    <option value="document">Dokument</option>
+                    <option value="icon">Ikon</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="grid gap-4 p-5 md:grid-cols-2">
-            {filteredTools.map((tool) => (
-              <div key={tool.id} className="rounded-2xl border bg-bg/30 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold tracking-tight">{tool.title}</div>
-                    <div className="mt-1 text-sm text-muted">{tool.description}</div>
+            <div className="grid gap-4 p-5 md:grid-cols-2">
+              {filteredTools.map((tool) => (
+                <div key={tool.id} className="rounded-2xl border bg-bg/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold tracking-tight">{tool.title}</div>
+                      <div className="mt-1 text-sm text-muted">{tool.description}</div>
+                    </div>
+                    <span className={clsx("rounded-full px-2.5 py-1 text-xs font-medium", toolTone(tool))}>
+                      {tool.category === "image" ? "Bild" : tool.category === "document" ? "Dokument" : "Ikon"}
+                    </span>
                   </div>
-                  <span className={clsx("rounded-full px-2.5 py-1 text-xs font-medium", toolTone(tool))}>
-                    {tool.category === "image" ? "Bild" : tool.category === "document" ? "Dokument" : "Ikon"}
-                  </span>
+                  <div className="mt-4 flex items-center gap-2 text-sm">
+                    <span className="rounded-lg border bg-surface px-2 py-1 font-medium">
+                      {tool.inputFormats.map(formatLabel).join(", ")}
+                    </span>
+                    <ArrowRight size={14} className="text-muted" />
+                    <span className="rounded-lg border bg-surface px-2 py-1 font-medium">{formatLabel(tool.outputFormat)}</span>
+                  </div>
+                  <div className="mt-4 text-xs text-muted">{tool.qualityHint}</div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full border bg-surface px-2.5 py-1 text-xs font-medium text-muted">
+                      {tool.speed === "fast" ? "Snabb" : tool.speed === "balanced" ? "Balanserad" : "Tung"}
+                    </span>
+                    <span className="rounded-full border bg-surface px-2.5 py-1 text-xs font-medium text-muted">
+                      {tool.supportsBulk ? "Stöd för bulk" : "En fil åt gången"}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-4 flex items-center gap-2 text-sm">
-                  <span className="rounded-lg border bg-surface px-2 py-1 font-medium">
-                    {tool.inputFormats.map(formatLabel).join(", ")}
-                  </span>
-                  <ArrowRight size={14} className="text-muted" />
-                  <span className="rounded-lg border bg-surface px-2 py-1 font-medium">{formatLabel(tool.outputFormat)}</span>
-                </div>
-                <div className="mt-4 text-xs text-muted">{tool.qualityHint}</div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="rounded-full border bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-                    {tool.speed === "fast" ? "Snabb" : tool.speed === "balanced" ? "Balanserad" : "Tung"}
-                  </span>
-                  <span className="rounded-full border bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-                    {tool.supportsBulk ? "Stöd för bulk" : "En fil åt gången"}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

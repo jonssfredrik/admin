@@ -19,6 +19,7 @@ export interface StagedFile {
   extension: FileFormat | null;
   compatibleToolIds: string[];
   selectedToolId: string | null;
+  queueItemId?: string;
 }
 
 export interface QueueItem {
