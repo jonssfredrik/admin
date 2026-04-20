@@ -40,10 +40,6 @@ const coreRoutes: CoreRoute[] = [
     label: "Hem",
     icon: LayoutDashboard,
     area: "hub",
-    children: [
-      { href: "/dashboard", label: "Översikt" },
-      { href: "/analytics", label: "Analys" },
-    ],
   },
   {
     href: "/analytics",

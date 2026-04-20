@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { featuredAreas, moduleHighlights } from "@/config/navigation";
+import { UpcomingRenewalsWidget } from "@/modules/subscriptions/components/UpcomingRenewalsWidget";
 
 const crossModuleActivity = [
   { area: "Operations", item: "JetWP", event: "2 kritiska alerts öppna", tone: "danger" as const, time: "Nu" },
@@ -73,23 +74,26 @@ export function HubHomePage() {
           </div>
         </Card>
 
-        <Card className="p-5">
-          <h2 className="text-base font-semibold tracking-tight">Områden</h2>
-          <div className="mt-4 space-y-3">
-            {featuredAreas.map((area) => {
-              const Icon = area.icon;
-              return (
-                <div key={area.title} className="rounded-2xl border bg-bg/40 p-4">
-                  <div className="flex items-center gap-2">
-                    <Icon size={15} className="text-muted" />
-                    <div className="font-medium">{area.title}</div>
+        <div className="space-y-4">
+          <UpcomingRenewalsWidget />
+          <Card className="p-5">
+            <h2 className="text-base font-semibold tracking-tight">Områden</h2>
+            <div className="mt-4 space-y-3">
+              {featuredAreas.map((area) => {
+                const Icon = area.icon;
+                return (
+                  <div key={area.title} className="rounded-2xl border bg-bg/40 p-4">
+                    <div className="flex items-center gap-2">
+                      <Icon size={15} className="text-muted" />
+                      <div className="font-medium">{area.title}</div>
+                    </div>
+                    <div className="mt-1 text-sm text-muted">{area.description}</div>
                   </div>
-                  <div className="mt-1 text-sm text-muted">{area.description}</div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
       </div>
 
       <section className="space-y-3">

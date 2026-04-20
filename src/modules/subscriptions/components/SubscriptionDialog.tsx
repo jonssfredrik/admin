@@ -7,7 +7,11 @@ import { Input, Label } from "@/components/ui/Input";
 import {
   categoryMeta,
   cycleLabel,
+  ownerMeta,
+  paymentMethodMeta,
   type BillingCycle,
+  type OwnerScope,
+  type PaymentMethod,
   type Subscription,
   type SubscriptionCategory,
   type SubscriptionStatus,
@@ -31,6 +35,10 @@ const EMPTY: Omit<Subscription, "id"> = {
   nextRenewal: "",
   website: "",
   notes: "",
+  paymentMethod: "card",
+  owner: "private",
+  businessExpense: false,
+  reminderDaysBefore: 7,
 };
 
 const categories = Object.entries(categoryMeta) as [SubscriptionCategory, { label: string; color: string }][];
@@ -41,6 +49,8 @@ const statuses: { value: SubscriptionStatus; label: string }[] = [
   { value: "paused", label: "Pausad" },
   { value: "cancelled", label: "Avslutad" },
 ];
+const paymentMethods = Object.entries(paymentMethodMeta) as [PaymentMethod, { label: string }][];
+const owners = Object.entries(ownerMeta) as [OwnerScope, { label: string; tone: string }][];
 
 const selectCls =
   "h-9 w-full rounded-lg border bg-surface px-3 text-sm outline-none transition-colors focus:border-fg/30 focus:ring-2 focus:ring-fg/5 text-fg";
@@ -52,7 +62,7 @@ export function SubscriptionDialog({ open, onClose, onSave, initial }: Props) {
     if (open) setForm(initial ? { ...initial } : { ...EMPTY });
   }, [open, initial]);
 
-  const set = (k: keyof typeof form, v: string | number) =>
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }));
 
   const valid = form.name.trim() !== "" && form.amountSEK > 0 && form.nextRenewal !== "";
@@ -214,7 +224,60 @@ export function SubscriptionDialog({ open, onClose, onSave, initial }: Props) {
           </div>
         </div>
 
-        {/* Row 5 — notes */}
+        {/* Row 5 — payment + owner + reminder */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label htmlFor="sub-payment">Betalmetod</Label>
+            <select
+              id="sub-payment"
+              className={selectCls}
+              value={form.paymentMethod ?? "card"}
+              onChange={(e) => set("paymentMethod", e.target.value as PaymentMethod)}
+            >
+              {paymentMethods.map(([val, meta]) => (
+                <option key={val} value={val}>{meta.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="sub-owner">Typ</Label>
+            <select
+              id="sub-owner"
+              className={selectCls}
+              value={form.owner ?? "private"}
+              onChange={(e) => set("owner", e.target.value as OwnerScope)}
+            >
+              {owners.map(([val, meta]) => (
+                <option key={val} value={val}>{meta.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="sub-reminder">Påminn (dagar innan)</Label>
+            <Input
+              id="sub-reminder"
+              type="number"
+              min={0}
+              max={90}
+              step={1}
+              value={form.reminderDaysBefore ?? 7}
+              onChange={(e) => set("reminderDaysBefore", parseInt(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+
+        {/* Row 6 — business expense toggle */}
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.businessExpense ?? false}
+            onChange={(e) => set("businessExpense", e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span>Avdragsgill / företagsutgift</span>
+        </label>
+
+        {/* Row 7 — notes */}
         <div>
           <Label htmlFor="sub-notes">Anteckningar</Label>
           <textarea

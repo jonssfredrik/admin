@@ -12,7 +12,7 @@ export const snaptldModule: AdminModuleDefinition = {
   icon: Radar,
   children: [
     { href: "/snaptld", label: "Översikt" },
-    { href: "/snaptld/queue", label: "Analyskö" },
+    { href: "/snaptld/queue", label: "Analyskö", matchPaths: ["/snaptld/[domain]"] },
     { href: "/snaptld/sources", label: "Källor" },
     { href: "/snaptld/reports", label: "Rapporter" },
     { href: "/snaptld/weights", label: "Vikter" },

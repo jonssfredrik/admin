@@ -12,6 +12,7 @@ export const subscriptionsModule: AdminModuleDefinition = {
   children: [
     { href: "/subscriptions", label: "Översikt" },
     { href: "/subscriptions/renewals", label: "Förnyelser" },
+    { href: "/subscriptions/calendar", label: "Kalender" },
   ],
   metrics: [
     { label: "Typ", value: "Kostnadsöversikt", hint: "Prenumerationer & fakturacykler" },

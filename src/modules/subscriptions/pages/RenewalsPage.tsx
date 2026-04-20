@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Pencil } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle, CheckCircle2, Pencil } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
@@ -32,7 +32,8 @@ function dayLabel(dateStr: string) {
 }
 
 export function RenewalsPage() {
-  const { items, update } = useSubscriptions();
+  const { items: rawItems, update, markPaid } = useSubscriptions();
+  const items = useMemo(() => rawItems.filter((s) => !s.archived), [rawItems]);
   const { success } = useToast();
   const [editTarget, setEditTarget] = useState<Subscription | undefined>();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -216,6 +217,14 @@ export function RenewalsPage() {
                         <div className="opacity-0 transition-opacity group-hover:opacity-100">
                           <RowMenu
                             items={[
+                              {
+                                label: "Markera som betald",
+                                icon: CheckCircle,
+                                onClick: () => {
+                                  markPaid(sub.id);
+                                  success("Markerad som betald", `${sub.name} — nästa förnyelse framflyttad`);
+                                },
+                              },
                               { label: "Redigera", icon: Pencil, onClick: () => openEdit(sub) },
                             ]}
                           />

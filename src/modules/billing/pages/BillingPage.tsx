@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -7,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { invoiceDrafts } from "@/modules/billing/data";
+import { IncomingSubscriptionInvoices } from "@/modules/subscriptions/components/IncomingSubscriptionInvoices";
 
 const statusTone = {
   draft: "neutral",
@@ -56,7 +58,11 @@ export function BillingPage() {
           <tbody>
             {invoiceDrafts.map((invoice) => (
               <tr key={invoice.id} className="transition-colors hover:bg-bg/50">
-                <Td className="font-mono text-xs">{invoice.id}</Td>
+                <Td className="font-mono text-xs">
+                  <Link href={`/billing/${invoice.id}`} className="hover:text-fg">
+                    {invoice.id}
+                  </Link>
+                </Td>
                 <Td>{invoice.company}</Td>
                 <Td>{invoice.customer}</Td>
                 <Td>
@@ -91,6 +97,8 @@ export function BillingPage() {
           </div>
         </Card>
       </div>
+
+      <IncomingSubscriptionInvoices />
     </div>
   );
 }

@@ -2,35 +2,134 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, HelpCircle, PanelLeft, PanelLeftClose } from "lucide-react";
 import clsx from "clsx";
 import { AdminHubMark } from "@/components/brand/AdminHubMark";
 import { navigationSections } from "@/config/navigation";
+import type { AdminNavChild, AdminNavItem } from "@/modules/types";
+
+function normalizePath(path: string) {
+  if (!path || path === "/") return "/";
+  return path.endsWith("/") ? path.slice(0, -1) : path;
+}
+
+function splitHref(href: string) {
+  const [path, hash] = href.split("#");
+  return {
+    path: normalizePath(path),
+    hash,
+  };
+}
+
+function matchesPath(pathname: string, href: string) {
+  const { path } = splitHref(href);
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function matchesDynamicPattern(pathname: string, pattern: string) {
+  const currentSegments = normalizePath(pathname).split("/").filter(Boolean);
+  const patternSegments = normalizePath(pattern).split("/").filter(Boolean);
+
+  if (currentSegments.length !== patternSegments.length) return false;
+
+  return patternSegments.every((segment, index) => {
+    if (segment.startsWith("[") && segment.endsWith("]")) {
+      return currentSegments[index].length > 0;
+    }
+
+    return currentSegments[index] === segment;
+  });
+}
+
+function getPathSegmentCount(path: string) {
+  return normalizePath(path).split("/").filter(Boolean).length;
+}
+
+function getStaticSegmentCount(pattern: string) {
+  return normalizePath(pattern)
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !(segment.startsWith("[") && segment.endsWith("]"))).length;
+}
+
+function getChildMatchScore(pathname: string, currentHash: string, child: AdminNavChild) {
+  const { path, hash } = splitHref(child.href);
+  const pathSegments = getPathSegmentCount(path);
+
+  if (hash) {
+    if (pathname === path && currentHash === hash) return 500 + path.length;
+    return 0;
+  }
+
+  if (pathname === path) return 600 + pathSegments * 100;
+  if (pathname.startsWith(`${path}/`)) return 300 + pathSegments * 100;
+
+  const matchingPattern = child.matchPaths?.find((pattern) => matchesDynamicPattern(pathname, pattern));
+  if (matchingPattern) {
+    return 350 + getStaticSegmentCount(matchingPattern) * 100 + getPathSegmentCount(matchingPattern) * 10;
+  }
+
+  return 0;
+}
+
+function getActiveChild(item: AdminNavItem, pathname: string, currentHash: string) {
+  if (!item.children?.length) return null;
+
+  return item.children.reduce<{ child: AdminNavChild | null; score: number }>(
+    (best, child) => {
+      const score = getChildMatchScore(pathname, currentHash, child);
+      if (score > best.score) return { child, score };
+      return best;
+    },
+    { child: null, score: 0 },
+  ).child;
+}
+
+function isItemActive(item: AdminNavItem, pathname: string, currentHash: string) {
+  if (item.matchPaths?.some((pattern) => matchesDynamicPattern(pathname, pattern))) return true;
+  if (matchesPath(pathname, item.href)) return true;
+  return getActiveChild(item, pathname, currentHash) !== null;
+}
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname() ?? "/");
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [currentHash, setCurrentHash] = useState("");
+
+  useEffect(() => {
+    const syncHash = () => setCurrentHash(window.location.hash.replace(/^#/, ""));
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("sidebar:collapsed");
     if (stored === "1") setCollapsed(true);
-    const storedExp = localStorage.getItem("sidebar:expanded");
-    if (storedExp) {
-      try {
-        setExpanded(JSON.parse(storedExp));
-      } catch {}
-    } else {
-      const initialExpanded: Record<string, boolean> = {};
-      navigationSections.forEach((section) =>
-        section.items.forEach((item) => {
-          if (item.children && pathname?.startsWith(item.href)) initialExpanded[item.href] = true;
-        }),
-      );
-      setExpanded(initialExpanded);
-    }
-  }, [pathname]);
+
+    const storedExpanded = localStorage.getItem("sidebar:expanded");
+    if (!storedExpanded) return;
+
+    try {
+      setExpanded(JSON.parse(storedExpanded));
+    } catch {}
+  }, []);
+
+  const expandedState = useMemo(() => {
+    const next = { ...expanded };
+
+    navigationSections.forEach((section) =>
+      section.items.forEach((item) => {
+        if (item.children && isItemActive(item, pathname, currentHash)) {
+          next[item.href] = true;
+        }
+      }),
+    );
+
+    return next;
+  }, [currentHash, expanded, pathname]);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -60,7 +159,7 @@ export function Sidebar() {
         )}
       >
         <div className="flex items-center gap-2">
-          <div className="bg-black p-2 rounded-md">
+          <div className="rounded-md bg-black p-2">
             <AdminHubMark className="h-[22px] w-[22px] shrink-0" />
           </div>
           {!collapsed && <span className="text-[15px] font-semibold tracking-tight">Admin Hub</span>}
@@ -88,9 +187,10 @@ export function Sidebar() {
             <div className="flex flex-col gap-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+                const activeChild = getActiveChild(item, pathname, currentHash);
+                const active = isItemActive(item, pathname, currentHash);
                 const hasChildren = !!item.children && !collapsed;
-                const isOpen = expanded[item.href];
+                const isOpen = expandedState[item.href];
 
                 return (
                   <div key={`${section.id}-${item.href}`}>
@@ -124,24 +224,20 @@ export function Sidebar() {
 
                     {hasChildren && isOpen && (
                       <div className="mt-0.5 ml-[22px] flex flex-col gap-0.5 border-l pl-3">
-                        {item.children?.map((child) => {
-                          const [childPath, childHash] = child.href.split("#");
-                          const childActive = childHash
-                            ? false
-                            : pathname === childPath || pathname?.startsWith(`${childPath}/`);
-                          return (
-                            <Link
-                              key={`${item.href}-${child.href}`}
-                              href={child.href}
-                              className={clsx(
-                                "rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
-                                childActive ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg",
-                              )}
-                            >
-                              {child.label}
-                            </Link>
-                          );
-                        })}
+                        {item.children?.map((child) => (
+                          <Link
+                            key={`${item.href}-${child.href}`}
+                            href={child.href}
+                            className={clsx(
+                              "rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+                              activeChild?.href === child.href
+                                ? "bg-bg font-medium text-fg"
+                                : "text-muted hover:bg-bg hover:text-fg",
+                            )}
+                          >
+                            {child.label}
+                          </Link>
+                        ))}
                       </div>
                     )}
                   </div>

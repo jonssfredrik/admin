@@ -9,6 +9,14 @@ export type SubscriptionCategory =
   | "security"
   | "domain";
 
+export type PaymentMethod = "card" | "invoice" | "swish" | "autogiro" | "paypal" | "other";
+export type OwnerScope = "private" | "business" | "shared";
+
+export interface PricePoint {
+  date: string;
+  amountSEK: number;
+}
+
 export interface Subscription {
   id: string;
   name: string;
@@ -22,6 +30,12 @@ export interface Subscription {
   cancelledAt?: string;
   website?: string;
   notes?: string;
+  paymentMethod?: PaymentMethod;
+  owner?: OwnerScope;
+  businessExpense?: boolean;
+  reminderDaysBefore?: number;
+  archived?: boolean;
+  priceHistory?: PricePoint[];
 }
 
 export const categoryMeta: Record<
@@ -54,6 +68,43 @@ export const cycleLabel: Record<BillingCycle, string> = {
   biannual: "Varannat år",
 };
 
+export const paymentMethodMeta: Record<PaymentMethod, { label: string }> = {
+  card:     { label: "Kort" },
+  invoice:  { label: "Faktura" },
+  swish:    { label: "Swish" },
+  autogiro: { label: "Autogiro" },
+  paypal:   { label: "PayPal" },
+  other:    { label: "Annat" },
+};
+
+export const ownerMeta: Record<OwnerScope, { label: string; tone: "neutral" | "success" | "warning" }> = {
+  private:  { label: "Privat",   tone: "neutral" },
+  business: { label: "Företag",  tone: "success" },
+  shared:   { label: "Delad",    tone: "warning" },
+};
+
+export function advanceRenewal(dateStr: string, cycle: BillingCycle): string {
+  const d = new Date(dateStr);
+  switch (cycle) {
+    case "monthly":   d.setMonth(d.getMonth() + 1); break;
+    case "quarterly": d.setMonth(d.getMonth() + 3); break;
+    case "annual":    d.setFullYear(d.getFullYear() + 1); break;
+    case "biannual":  d.setFullYear(d.getFullYear() + 2); break;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+export function cycleShortLabel(cycle: BillingCycle): string {
+  return cycle === "monthly" ? "/mån"
+    : cycle === "quarterly" ? "/kvartal"
+    : cycle === "annual" ? "/år"
+    : "/2 år";
+}
+
+export function formatSEK(amount: number): string {
+  return amount.toLocaleString("sv-SE", { maximumFractionDigits: 0 }) + " kr";
+}
+
 export function toMonthly(amountSEK: number, cycle: BillingCycle): number {
   switch (cycle) {
     case "monthly":  return amountSEK;
@@ -75,6 +126,9 @@ export const defaultSubscriptions: Subscription[] = [
     startedAt: "2023-09-01",
     nextRenewal: "2026-05-01",
     website: "https://hetzner.com",
+    paymentMethod: "card",
+    owner: "business",
+    businessExpense: true,
   },
   {
     id: "sub-2",
@@ -87,6 +141,13 @@ export const defaultSubscriptions: Subscription[] = [
     startedAt: "2024-01-15",
     nextRenewal: "2026-04-28",
     website: "https://vercel.com",
+    paymentMethod: "card",
+    owner: "business",
+    businessExpense: true,
+    priceHistory: [
+      { date: "2024-01-15", amountSEK: 190 },
+      { date: "2025-06-01", amountSEK: 210 },
+    ],
   },
   {
     id: "sub-3",
@@ -185,6 +246,8 @@ export const defaultSubscriptions: Subscription[] = [
     startedAt: "2020-04-01",
     nextRenewal: "2026-04-23",
     website: "https://spotify.com",
+    paymentMethod: "card",
+    owner: "private",
   },
   {
     id: "sub-11",
@@ -197,6 +260,13 @@ export const defaultSubscriptions: Subscription[] = [
     startedAt: "2021-09-01",
     nextRenewal: "2026-04-30",
     website: "https://netflix.com",
+    paymentMethod: "card",
+    owner: "shared",
+    priceHistory: [
+      { date: "2021-09-01", amountSEK: 109 },
+      { date: "2023-05-01", amountSEK: 139 },
+      { date: "2025-01-01", amountSEK: 169 },
+    ],
   },
   {
     id: "sub-12",

@@ -9,7 +9,7 @@ export const billingModule: AdminModuleDefinition = {
   href: "/billing",
   icon: ReceiptText,
   children: [
-    { href: "/billing", label: "Översikt" },
+    { href: "/billing", label: "Översikt", matchPaths: ["/billing/[id]"] },
   ],
   metrics: [
     { label: "Fokus", value: "Fakturering", hint: "Manuella flöden" },
