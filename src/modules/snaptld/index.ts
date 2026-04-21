@@ -13,6 +13,7 @@ export const snaptldModule: AdminModuleDefinition = {
   children: [
     { href: "/snaptld", label: "Översikt" },
     { href: "/snaptld/queue", label: "Analyskö", matchPaths: ["/snaptld/[domain]"] },
+    { href: "/snaptld/domains", label: "Databas" },
     { href: "/snaptld/sources", label: "Källor" },
     { href: "/snaptld/reports", label: "Rapporter" },
     { href: "/snaptld/weights", label: "Vikter" },

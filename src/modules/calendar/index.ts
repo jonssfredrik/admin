@@ -8,11 +8,7 @@ export const calendarModule: AdminModuleDefinition = {
   area: "workspace",
   href: "/calendar",
   icon: CalendarDays,
-  children: [
-    { href: "/calendar", label: "Månad" },
-    { href: "/calendar/week", label: "Vecka" },
-    { href: "/calendar/agenda", label: "Agenda" },
-  ],
+  children: [{ href: "/calendar/settings", label: "Inställningar" }],
   metrics: [
     { label: "Källor", value: "4", hint: "Egna + aggregerade datum" },
     { label: "Lagring", value: "Lokalt", hint: "localStorage i webbläsaren" },

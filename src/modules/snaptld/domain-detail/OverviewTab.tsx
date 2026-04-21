@@ -6,6 +6,9 @@ import { SimilarDomains } from "@/modules/snaptld/components/SimilarDomains";
 import { DonutChart } from "@/components/charts/DonutChart";
 import type { DomainAnalysis } from "@/modules/snaptld/data/core";
 import { categoryMeta, type AnalysisCategory } from "@/modules/snaptld/data/core";
+import { StepCardHeader } from "./StepCardHeader";
+import { getCategoryWeightMap } from "@/modules/snaptld/selectors/weights";
+import type { WeightsConfig } from "@/modules/snaptld/types";
 
 const donutColor = (score: number): string => {
   if (score >= 80) return "#10b981";
@@ -13,20 +16,36 @@ const donutColor = (score: number): string => {
   return "#ef4444";
 };
 
-export function OverviewTab({ domain }: { domain: DomainAnalysis }) {
+export function OverviewTab({
+  domain,
+  onRun,
+  isRunning,
+  weightsConfig,
+}: {
+  domain: DomainAnalysis;
+  onRun: () => void;
+  isRunning?: boolean;
+  weightsConfig: WeightsConfig;
+}) {
+  const categoryWeights = getCategoryWeightMap(weightsConfig);
   const donut = (Object.keys(categoryMeta) as AnalysisCategory[]).map((key) => ({
     label: categoryMeta[key].label,
-    value: domain.categories[key].weight,
+    value: categoryWeights[key],
     color: donutColor(domain.categories[key].score),
   }));
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2">
-        <h2 className="text-sm font-semibold tracking-tight">Kategoripoäng</h2>
-        <p className="text-xs text-muted">Klicka för att se signaler per kategori</p>
+        <StepCardHeader
+          title="Kategoripoäng"
+          description="Klicka för att se signaler per kategori eller kör om sammanställningen för fliken."
+          actionLabel="Kör översikt"
+          onRun={onRun}
+          running={isRunning}
+        />
         <div className="mt-4">
-          <ScoreBreakdown categories={domain.categories} />
+          <ScoreBreakdown categories={domain.categories} weights={categoryWeights} />
         </div>
       </Card>
 

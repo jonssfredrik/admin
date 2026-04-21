@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/Card";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
 import { SignalList } from "@/modules/snaptld/components/SignalList";
 import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import { StepCardHeader } from "./StepCardHeader";
 
 function MozStat({ label, value, max = 100, hint }: { label: string; value: number; max?: number; hint?: string }) {
   const pct = Math.round((value / max) * 100);
@@ -22,7 +23,15 @@ function MozStat({ label, value, max = 100, hint }: { label: string; value: numb
   );
 }
 
-export function SeoTab({ domain }: { domain: DomainAnalysis }) {
+export function SeoTab({
+  domain,
+  onRun,
+  isRunning,
+}: {
+  domain: DomainAnalysis;
+  onRun: () => void;
+  isRunning?: boolean;
+}) {
   const { seo } = domain;
   const cat = domain.categories.seo;
 
@@ -33,14 +42,17 @@ export function SeoTab({ domain }: { domain: DomainAnalysis }) {
         <MozStat label="Page Authority" value={seo.pageAuthority} hint="Moz PA" />
         <MozStat label="Backlinks" value={seo.backlinks} max={Math.max(seo.backlinks, 1000)} hint="Totalt" />
         <MozStat label="Refererande domäner" value={seo.referringDomains} max={Math.max(seo.referringDomains, 100)} />
-        <MozStat label="Spam-poäng" value={seo.spamScore} hint={seo.spamScore > 10 ? "Förhöjd — granska" : "Låg risk"} />
+        <MozStat label="Spam-poäng" value={seo.spamScore} hint={seo.spamScore > 10 ? "Förhöjd - granska" : "Låg risk"} />
       </div>
 
       <Card className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">SEO-signaler</h2>
-          <p className="text-xs text-muted">Integrerade från Moz API</p>
-        </div>
+        <StepCardHeader
+          title="SEO-signaler"
+          description="Integrerade från Moz API"
+          actionLabel="Kör SEO"
+          onRun={onRun}
+          running={isRunning}
+        />
         <SignalList signals={cat.signals} />
       </Card>
     </div>

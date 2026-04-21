@@ -1,16 +1,17 @@
 "use client";
 
 import { formatTimeLabel, type ResolvedCalendarEvent } from "@/modules/calendar/data/core";
+import { useCalendarSettings } from "@/modules/calendar/lib/useCalendarSettings";
 
 interface Props {
   event: ResolvedCalendarEvent;
   compact?: boolean;
 }
 
-function buildMeta(event: ResolvedCalendarEvent) {
+function buildMeta(event: ResolvedCalendarEvent, showDescriptions: boolean) {
   return [
     event.time ? formatTimeLabel(event.time, event.endTime) : null,
-    event.description ?? null,
+    showDescriptions ? event.description ?? null : null,
     event.sourceDetail ?? null,
     event.statusLabel ?? null,
   ]
@@ -19,7 +20,8 @@ function buildMeta(event: ResolvedCalendarEvent) {
 }
 
 export function EventContent({ event, compact = false }: Props) {
-  const meta = buildMeta(event);
+  const { hydrated, settings } = useCalendarSettings();
+  const meta = buildMeta(event, hydrated ? settings.showEventDescriptions : true);
 
   return (
     <span className="min-w-0">

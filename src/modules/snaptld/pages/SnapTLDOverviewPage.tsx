@@ -10,53 +10,23 @@ import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { useToast } from "@/components/toast/ToastProvider";
-import {
-  domainAnalyses,
-  scoreTrend,
-  volumePerDay,
-  verdictMeta,
-  type Verdict,
-} from "@/modules/snaptld/data/core";
+import { domainAnalyses, scoreTrend, volumePerDay } from "@/modules/snaptld/data/core";
 import { feedSources } from "@/modules/snaptld/data/feeds";
 import { CandidateRow } from "@/modules/snaptld/components/CandidateRow";
 import { ImportDialog } from "@/modules/snaptld/components/ImportDialog";
 import { AnalysisProgress } from "@/modules/snaptld/components/AnalysisProgress";
 import { NewSinceBanner } from "@/modules/snaptld/components/NewSinceBanner";
-
-const verdictColors: Record<Verdict, string> = {
-  excellent: "#10b981",
-  good: "#34d399",
-  mediocre: "#f59e0b",
-  skip: "#ef4444",
-};
+import { getActiveFeedCount, getOverviewStats, getRunningDomain, getTopCandidates, getVerdictDonut } from "@/modules/snaptld/selectors/overview";
 
 export function SnapTLDOverviewPage() {
   const toast = useToast();
   const [importOpen, setImportOpen] = useState(false);
 
-  const stats = useMemo(() => {
-    const total = domainAnalyses.length;
-    const excellent = domainAnalyses.filter((d) => d.verdict === "excellent").length;
-    const good = domainAnalyses.filter((d) => d.verdict === "good").length;
-    const avg = Math.round(
-      domainAnalyses.reduce((s, d) => s + d.totalScore, 0) / Math.max(total, 1),
-    );
-    return { total, excellent, good, avg };
-  }, []);
-
-  const topCandidates = [...domainAnalyses]
-    .filter((d) => d.status === "analyzed")
-    .sort((a, b) => b.totalScore - a.totalScore)
-    .slice(0, 5);
-
-  const verdictDonut = (["excellent", "good", "mediocre", "skip"] as Verdict[]).map((v) => ({
-    label: verdictMeta[v].label,
-    value: domainAnalyses.filter((d) => d.verdict === v).length,
-    color: verdictColors[v],
-  })).filter((s) => s.value > 0);
-
-  const activeFeeds = feedSources.filter((f) => f.status === "active").length;
-  const running = domainAnalyses.find((d) => d.status === "running");
+  const stats = useMemo(() => getOverviewStats(domainAnalyses), []);
+  const topCandidates = useMemo(() => getTopCandidates(domainAnalyses), []);
+  const verdictDonut = useMemo(() => getVerdictDonut(domainAnalyses), []);
+  const activeFeeds = useMemo(() => getActiveFeedCount(feedSources), []);
+  const running = useMemo(() => getRunningDomain(domainAnalyses), []);
 
   return (
     <div className="space-y-8">
@@ -90,9 +60,7 @@ export function SnapTLDOverviewPage() {
         <StatCard label="Aktiva feeds" value={`${activeFeeds}/${feedSources.length}`} hint="Körs automatiskt" />
       </div>
 
-      {running && (
-        <AnalysisProgress completed={5} />
-      )}
+      {running && <AnalysisProgress completed={5} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -107,7 +75,7 @@ export function SnapTLDOverviewPage() {
             </div>
           </div>
           <div className="mt-4">
-            <AreaChart data={scoreTrend} height={200} formatValue={(v) => `${v} p`} />
+            <AreaChart data={scoreTrend} height={200} formatValue={(value) => `${value} p`} />
           </div>
         </Card>
 
@@ -130,8 +98,8 @@ export function SnapTLDOverviewPage() {
             <Sparkles size={14} className="text-muted" />
           </div>
           <div className="mt-4 space-y-2">
-            {topCandidates.map((d) => (
-              <CandidateRow key={d.slug} domain={d} />
+            {topCandidates.map((domain) => (
+              <CandidateRow key={domain.slug} domain={domain} />
             ))}
           </div>
         </Card>

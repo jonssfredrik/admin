@@ -10,6 +10,7 @@ import {
 interface Props {
   categories: Record<AnalysisCategory, CategoryResult>;
   linkBase?: string;
+  weights?: Partial<Record<AnalysisCategory, number>>;
 }
 
 const order: AnalysisCategory[] = [
@@ -23,24 +24,22 @@ const order: AnalysisCategory[] = [
   "history",
 ];
 
-export function ScoreBreakdown({ categories, linkBase }: Props) {
+export function ScoreBreakdown({ categories, linkBase, weights }: Props) {
   return (
     <div className="divide-y divide-border/60">
       {order.map((key) => {
-        const cat = categories[key];
+        const category = categories[key];
         const meta = categoryMeta[key];
         const content = (
           <div className="flex items-center gap-4 py-2.5">
             <div className="w-32 shrink-0">
               <div className="text-sm font-medium">{meta.label}</div>
-              <div className="text-[11px] text-muted">Vikt {cat.weight}%</div>
+              <div className="text-[11px] text-muted">Vikt {weights?.[key] ?? category.weight}%</div>
             </div>
             <div className="flex-1">
-              <ScoreBar score={cat.score} showValue thick />
+              <ScoreBar score={category.score} showValue thick />
             </div>
-            {linkBase && (
-              <ChevronRight size={14} className="shrink-0 text-muted" />
-            )}
+            {linkBase && <ChevronRight size={14} className="shrink-0 text-muted" />}
           </div>
         );
         return linkBase ? (

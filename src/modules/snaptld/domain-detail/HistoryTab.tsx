@@ -3,8 +3,17 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Table";
 import { SignalList } from "@/modules/snaptld/components/SignalList";
 import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import { StepCardHeader } from "./StepCardHeader";
 
-export function HistoryTab({ domain }: { domain: DomainAnalysis }) {
+export function HistoryTab({
+  domain,
+  onRun,
+  isRunning,
+}: {
+  domain: DomainAnalysis;
+  onRun: () => void;
+  isRunning?: boolean;
+}) {
   const { wayback } = domain;
   const cat = domain.categories.history;
 
@@ -41,10 +50,13 @@ export function HistoryTab({ domain }: { domain: DomainAnalysis }) {
       </Card>
 
       <Card className="lg:col-span-2 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">Historik-flaggor</h2>
-          <p className="text-xs text-muted">Identifierade problem i tidigare innehåll</p>
-        </div>
+        <StepCardHeader
+          title="Historik-flaggor"
+          description="Identifierade problem i tidigare innehåll"
+          actionLabel="Kör historik"
+          onRun={onRun}
+          running={isRunning}
+        />
         {wayback.flags.length === 0 ? (
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-400">
             Inga flaggor. Tidigare innehåll verkar rent.

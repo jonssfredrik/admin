@@ -24,10 +24,10 @@ const registrars: Registrar[] = [
     estimate: "från 99 kr/år",
   },
   {
-    id: "binero",
-    name: "Binero",
+    id: "inleed",
+    name: "Inleed",
     country: "se",
-    url: (d) => `https://www.binero.se/domannamn/registrera/?domain=${encodeURIComponent(d)}`,
+    url: (d) => `https://www.inleed.se/webshop?domain=${encodeURIComponent(d)}`,
     estimate: "från 89 kr/år",
   },
   {
@@ -62,7 +62,7 @@ export function RegisterActions({ domain }: { domain: DomainAnalysis }) {
             <Badge tone="success">Tillgänglig</Badge>
           </div>
           <p className="mt-1 text-xs text-muted">
-            Länkar till registrarer. Öppnas i ny flik — priset och tillgänglighet verifieras där.
+            Länkar till registrarer. Öppnas i ny flik och priset samt tillgänglighet verifieras där.
           </p>
         </div>
         <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />

@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import clsx from "clsx";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useToast } from "@/components/toast/ToastProvider";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { useToast } from "@/components/toast/ToastProvider";
 import { CalendarSummaryCards } from "@/modules/calendar/components/CalendarSummaryCards";
+import { CalendarViewNav } from "@/modules/calendar/components/CalendarViewNav";
 import { EventContent } from "@/modules/calendar/components/EventContent";
 import { EventDetailsDialog } from "@/modules/calendar/components/EventDetailsDialog";
 import { EventDialog } from "@/modules/calendar/components/EventDialog";
@@ -28,6 +28,7 @@ import {
   type ResolvedCalendarEvent,
 } from "@/modules/calendar/data/core";
 import { useCalendarFeed } from "@/modules/calendar/lib/useCalendarFeed";
+import { useCalendarSettings } from "@/modules/calendar/lib/useCalendarSettings";
 import { useCalendarViewState } from "@/modules/calendar/lib/viewState";
 
 const SLOT_HEIGHT = 64;
@@ -36,6 +37,7 @@ const TOTAL_HEIGHT = SLOT_HEIGHT * 24;
 export function WeekPage() {
   const toast = useToast();
   const { hydrated: viewHydrated, state: viewState, setWeekDate, setSources } = useCalendarViewState();
+  const { settings } = useCalendarSettings();
   const [anchorDate, setAnchorDate] = useState(() => startOfWeek(new Date()));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -74,9 +76,10 @@ export function WeekPage() {
 
   useEffect(() => {
     if (!scrollRef.current) return;
+    if (!settings.autoScrollWeekToNow) return;
     const targetHour = Math.max(0, new Date().getHours() - 2);
     scrollRef.current.scrollTop = targetHour * SLOT_HEIGHT;
-  }, [anchorDate]);
+  }, [anchorDate, settings.autoScrollWeekToNow]);
 
   const handleCreate = (values: Omit<CalendarEvent, "id" | "source">) => {
     addEvent({ ...values, id: `evt-${Date.now()}`, source: "manual" });
@@ -106,21 +109,7 @@ export function WeekPage() {
           subtitle="Veckovy med timslots för manuella tider och samlade deadlines."
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/calendar"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Månad
-          </Link>
-          <Link href="/calendar/week" className="inline-flex h-9 items-center rounded-lg bg-fg px-3 text-sm font-medium text-bg">
-            Vecka
-          </Link>
-          <Link
-            href="/calendar/agenda"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Agenda
-          </Link>
+          <CalendarViewNav current="week" />
           <Button
             onClick={() => {
               setDefaultDate(todayISO());

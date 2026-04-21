@@ -1,61 +1,5 @@
-export type AnalysisCategory =
-  | "structure"
-  | "lexical"
-  | "brand"
-  | "market"
-  | "risk"
-  | "salability"
-  | "seo"
-  | "history";
-
-export type Tone = "success" | "warning" | "danger" | "neutral";
-
-export type Verdict = "excellent" | "good" | "mediocre" | "skip";
-
-export interface Signal {
-  label: string;
-  value: string;
-  tone: Tone;
-}
-
-export interface CategoryResult {
-  score: number;
-  weight: number;
-  signals: Signal[];
-  verdict?: string;
-}
-
-export interface WaybackInfo {
-  snapshots: number;
-  firstSeen: string;
-  lastSeen: string;
-  flags: string[];
-}
-
-export interface SeoInfo {
-  domainAuthority: number;
-  pageAuthority: number;
-  backlinks: number;
-  referringDomains: number;
-  spamScore: number;
-}
-
-export interface DomainAnalysis {
-  slug: string;
-  domain: string;
-  tld: string;
-  source: "internetstiftelsen" | "manual" | "csv" | "url";
-  fetchedAt: string;
-  expiresAt: string;
-  totalScore: number;
-  verdict: Verdict;
-  status: "analyzed" | "queued" | "running" | "failed";
-  categories: Record<AnalysisCategory, CategoryResult>;
-  aiSummary: string;
-  estimatedValue: string;
-  seo: SeoInfo;
-  wayback: WaybackInfo;
-}
+import type { AnalysisCategory, CategoryResult, DomainAnalysis, Signal, Tone, Verdict } from "@/modules/snaptld/types";
+export type { AnalysisCategory, CategoryResult, DomainAnalysis, Signal, Tone, Verdict } from "@/modules/snaptld/types";
 
 export const categoryMeta: Record<AnalysisCategory, { label: string; description: string }> = {
   structure: {
@@ -448,6 +392,172 @@ export const domainAnalyses: DomainAnalysis[] = [
     seo: { domainAuthority: 17, pageAuthority: 22, backlinks: 74, referringDomains: 19, spamScore: 6 },
     wayback: { snapshots: 11, firstSeen: "2015-03-19", lastSeen: "2023-11-28", flags: [] },
   },
+  {
+    slug: "aiverktyg",
+    domain: "aiverktyg.se",
+    tld: ".se",
+    source: "internetstiftelsen",
+    fetchedAt: "2026-04-20 21:58",
+    expiresAt: "2026-04-30",
+    totalScore: 92,
+    verdict: "excellent",
+    status: "analyzed",
+    estimatedValue: "25 000 – 45 000 kr",
+    aiSummary: "Extremt relevant och sökordsoptimerad domän. AI är den snabbast växande sektorn och 'verktyg' är det primära sökordet för användare som letar efter lösningar.",
+    categories: {
+      structure: mk(95, 12, [ { "label": "Längd", "value": "9 tecken", "tone": "success" }, { "label": "Stavning", "value": "Korrekt", "tone": "success" } ] ),
+      lexical: mk(98, 12, [ { "label": "Svenska ord", "value": "AI + verktyg", "tone": "success" }, { "label": "Begriplighet", "value": "Total", "tone": "success" } ] ),
+      brand: mk(85, 16, [ { "label": "Minnesvärdhet", "value": "Mycket hög", "tone": "success" } ] ),
+      market: mk(96, 15, [ { "label": "Målgrupp", "value": "B2B/B2C Tech", "tone": "success" }, { "label": "Kommersiell intent", "value": "Extremt hög", "tone": "success" } ] ),
+      risk: mk(90, 10, [ { "label": "TM-träffar", "value": "0", "tone": "success" } ] ),
+      salability: mk(94, 14, [ { "label": "Realistiska köpare", "value": "SaaS-bolag, affiliate", "tone": "success" } ] ),
+      seo: mk(90, 12, [ { "label": "Sökvolym", "value": "12 000/mån", "tone": "success" } ] ),
+      history: mk(80, 10, [ { "label": "Status", "value": "Clean", "tone": "success" } ] )
+    },
+    seo: { domainAuthority: 15, pageAuthority: 20, backlinks: 45, referringDomains: 12, spamScore: 1 },
+    wayback: { snapshots: 4, firstSeen: "2023-01-15", lastSeen: "2025-12-01", flags: [] }
+  },
+  {
+    slug: "planta",
+    domain: "planta.se",
+    tld: ".se",
+    source: "internetstiftelsen",
+    fetchedAt: "2026-04-20 22:14",
+    expiresAt: "2026-05-12",
+    totalScore: 91,
+    verdict: "excellent",
+    status: "analyzed",
+    estimatedValue: "45 000 – 85 000 kr",
+    aiSummary: "Ett absolut toppdomän-namn. Kort, enkelt att stava och extremt varumärkesbart. Perfekt för allt från e-handel med växter till en community-app för trädgårdsintresserade. Ett 'premium ett-ords-domän' med mycket hög prestige.",
+    categories: {
+      structure: mk(98, 12, [ { label: "Längd", value: "6 tecken", tone: "success" }, { label: "Stavning", value: "Korrekt", tone: "success" }, { label: "Sammansatt", value: "Nej", tone: "success" }, ]),
+      lexical: mk(96, 12, [ { label: "Svenska ord", value: "Planta", tone: "success" }, { label: "Begriplighet", value: "Universal", tone: "success" }, ]),
+      brand: mk(95, 16, [ { label: "Minnesvärdhet", value: "Extremt hög", tone: "success" }, { label: "Brand-bar", value: "Ja, premium", tone: "success" }, ], "Sällsynt möjlighet att äga ett kort och konkret substantiv."),
+      market: mk(89, 14, [ { label: "Målgrupp", value: "B2C / Hem & Trädgård", tone: "success" }, { label: "Bransch", value: "E-handel / Miljö", tone: "success" }, { label: "Kommersiell intent", value: "Hög", tone: "success" }, ]),
+      risk: mk(92, 10, [
+      { label: "TM-träffar", value: "0", tone: "success" },
+      { label: "Generisk", value: "Låg risk (substantiv)", tone: "success" },
+      ]),
+      salability: mk(94, 14, [
+      { label: "Realistiska köpare", value: "Plantagen, startups, e-handlare", tone: "success" },
+      { label: "Prisnivå", value: "45k+", tone: "success" },
+      ]),
+      seo: mk(85, 12, [
+      { label: "DA", value: "32", tone: "success" },
+      { label: "Backlinks", value: "840", tone: "success" },
+      { label: "Sökvolym", value: "22 000/mån", tone: "success" },
+      ]),
+      history: mk(88, 10, [
+      { label: "Snapshots", value: "142", tone: "success" },
+      { label: "Flaggor", value: "Inga", tone: "success" },
+      ]),
+    },
+    seo: { domainAuthority: 32, pageAuthority: 38, backlinks: 840, referringDomains: 112, spamScore: 1 },
+    wayback: { snapshots: 142, firstSeen: "2001-04-05", lastSeen: "2026-01-10", flags: [] },
+    },
+  {
+  "slug": "solcellskollen",
+  "domain": "solcellskollen.nu",
+  "tld": ".nu",
+  "source": "internetstiftelsen",
+  "fetchedAt": "2026-04-20 21:58",
+  "expiresAt": "2026-05-02",
+  "totalScore": 84,
+  "verdict": "good",
+  "status": "analyzed",
+  "estimatedValue": "12 000 – 20 000 kr",
+  "aiSummary": "Perfekt för en jämförelsetjänst inom grön energi. 'Kollen' är ett etablerat begrepp för konsumenttjänster i Sverige.",
+  "categories": {
+  "structure": mk(82, 12, [ { "label": "Längd", "value": "14 tecken", "tone": "neutral" } ] ),
+  "lexical": mk(92, 12, [ { "label": "Svenska ord", "value": "Solceller + kollen", "tone": "success" } ] ),
+  "brand": mk(88, 16, [ { "label": "Brand-bar", "value": "Ja, hög potential", "tone": "success" } ] ),
+  "market": mk(90, 14, [ { "label": "Målgrupp", "value": "Villaägare", "tone": "success" } ] ),
+  "risk": mk(85, 10, [ { "label": "Generisk", "value": "Låg risk", "tone": "success" } ] ),
+  "salability": mk(80, 14, [ { "label": "Realistiska köpare", "value": "Energibolag, leads-sajter", "tone": "success" } ] ),
+  "seo": mk(75, 12, [ { "label": "Sökvolym", "value": "4 500/mån", "tone": "success" } ] ),
+  "history": mk(70, 10, [ { "label": "Snapshots", "value": "2", "tone": "neutral" } ] )
+  },
+  "seo": { "domainAuthority": 8, "pageAuthority": 12, "backlinks": 120, "referringDomains": 15, "spamScore": 0 },
+  "wayback": { "snapshots": 2, "firstSeen": "2021-05-10", "lastSeen": "2024-11-15", "flags": [] }
+  },
+  {
+  "slug": "hybridbil",
+  "domain": "hybridbil.se",
+  "tld": ".se",
+  "source": "internetstiftelsen",
+  "fetchedAt": "2026-04-20 21:58",
+  "expiresAt": "2026-04-28",
+  "totalScore": 87,
+  "verdict": "good",
+  "status": "analyzed",
+  "estimatedValue": "15 000 – 25 000 kr",
+  "aiSummary": "Kort, deskriptivt och med högt kommersiellt värde. Fordonsindustrins skifte gör detta till ett starkt sökord för bilhandlare.",
+  "categories": {
+  "structure": mk(90, 12, [ { "label": "Längd", "value": "9 tecken", "tone": "success" } ] ),
+  "lexical": mk(95, 12, [ { "label": "Begriplighet", "value": "Global/Lokal", "tone": "success" } ] ),
+  "brand": mk(70, 16, [ { "label": "Brand-bar", "value": "Beskrivande", "tone": "warning" } ] ),
+  "market": mk(92, 14, [ { "label": "Bransch", "value": "Automotive", "tone": "success" } ] ),
+  "risk": mk(88, 10, [ { "label": "TM-träffar", "value": "0", "tone": "success" } ] ),
+  "salability": mk(85, 13, [ { "label": "Köpare", "value": "Bilhandlare, portaler", "tone": "success" } ] ),
+  "seo": mk(88, 12, [ { "label": "Sökvolym", "value": "8 200/mån", "tone": "success" } ] ),
+  "history": mk(75, 10, [ { "label": "Flaggor", "value": "Inga", "tone": "success" } ] )
+  },
+  "seo": { "domainAuthority": 12, "pageAuthority": 18, "backlinks": 800, "referringDomains": 40, "spamScore": 2 },
+  "wayback": { "snapshots": 25, "firstSeen": "2008-11-20", "lastSeen": "2025-10-05", "flags": [] }
+  },
+  {
+slug: "fredagsmys",
+domain: "fredagsmys.se",
+tld: ".se",
+source: "internetstiftelsen",
+fetchedAt: "2026-04-20 22:16",
+expiresAt: "2026-05-18",
+totalScore: 94,
+verdict: "excellent",
+status: "analyzed",
+estimatedValue: "60 000 – 120 000 kr",
+aiSummary:
+"En kulturell ikon i domänform. Begreppet 'Fredagsmys' är djupt rotat i den svenska folksjälen och ägs mentalt av hela dagligvaruhandeln. Extremt hög igenkänningsfaktor med enorm potential för allt från receptportaler till streamingtjänster eller snacks-varumärken.",
+categories: {
+structure: mk(95, 12, [
+{ label: "Längd", value: "10 tecken", tone: "success" },
+{ label: "Stavning", value: "Korrekt", tone: "success" },
+{ label: "Sammansatt", value: "Ja", tone: "success" },
+]),
+lexical: mk(100, 12, [
+{ label: "Svenska ord", value: "Fredags + mys", tone: "success" },
+{ label: "Begriplighet", value: "Total", tone: "success" },
+]),
+brand: mk(98, 16, [
+{ label: "Minnesvärdhet", value: "Exceptionell", tone: "success" },
+{ label: "Brand-bar", value: "Ja, kulturellt fenomen", tone: "success" },
+], "Ett av de starkaste varumärkesorden som finns på den svenska marknaden."),
+market: mk(96, 14, [
+{ label: "Målgrupp", value: "Hela Sverige (B2C)", tone: "success" },
+{ label: "Bransch", value: "FMCG / Media / Mat", tone: "success" },
+{ label: "Kommersiell intent", value: "Mycket hög", tone: "success" },
+]),
+risk: mk(85, 10, [
+{ label: "TM-träffar", value: "Vissa (generiskt bruk)", tone: "warning" },
+{ label: "Beskrivande", value: "Hög, men etablerat", tone: "success" },
+]),
+salability: mk(96, 14, [
+{ label: "Realistiska köpare", value: "OLW, Estrella, ICA, Coop", tone: "success" },
+{ label: "Prisnivå", value: "60k+", tone: "success" },
+]),
+seo: mk(92, 12, [
+{ label: "DA", value: "41", tone: "success" },
+{ label: "Backlinks", value: "1 250", tone: "success" },
+{ label: "Sökvolym", value: "35 000/mån", tone: "success" },
+]),
+history: mk(90, 10, [
+{ label: "Snapshots", value: "210", tone: "success" },
+{ label: "Flaggor", value: "Inga", tone: "success" },
+]),
+},
+seo: { domainAuthority: 41, pageAuthority: 45, backlinks: 1250, referringDomains: 184, spamScore: 1 },
+wayback: { snapshots: 210, firstSeen: "2002-11-20", lastSeen: "2026-02-15", flags: [] },
+}
 ];
 
 export const scoreTrend = [

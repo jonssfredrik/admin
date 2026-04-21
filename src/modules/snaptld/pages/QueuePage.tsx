@@ -33,7 +33,7 @@ import { Checkbox } from "@/modules/snaptld/components/Checkbox";
 import { useWatchlist } from "@/modules/snaptld/lib/watchlist";
 import { useHidden, useReviewed } from "@/modules/snaptld/lib/reviewed";
 import { useDomainNotes } from "@/modules/snaptld/lib/notes";
-import { expiryInfo } from "@/modules/snaptld/lib/urgency";
+import { getQueueRows, getUniqueTlds, type QueueSortDir, type QueueSortKey } from "@/modules/snaptld/selectors/queue";
 
 const verdictFilters: { id: "all" | Verdict; label: string }[] = [
   { id: "all", label: "Alla" },
@@ -43,15 +43,7 @@ const verdictFilters: { id: "all" | Verdict; label: string }[] = [
   { id: "skip", label: verdictMeta.skip.label },
 ];
 
-type SortKey = "score" | "domain" | "expires" | "value";
-type SortDir = "asc" | "desc";
-
 const PAGE_SIZE = 20;
-
-function parseValue(range: string): number {
-  const m = range.match(/(\d[\d\s]*)/);
-  return m ? parseInt(m[1].replace(/\s/g, ""), 10) : 0;
-}
 
 export function QueuePage() {
   const toast = useToast();
@@ -66,58 +58,38 @@ export function QueuePage() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [onlyWatched, setOnlyWatched] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("score");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<QueueSortKey>("score");
+  const [sortDir, setSortDir] = useState<QueueSortDir>("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
 
-  const uniqueTlds = useMemo(
-    () => Array.from(new Set(domainAnalyses.map((d) => d.tld))).sort(),
-    [],
-  );
+  const uniqueTlds = useMemo(() => getUniqueTlds(domainAnalyses), []);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const watched = new Set(watchlist.slugs);
-    const hiddenSet = new Set(hidden.values);
+    const tagMap = new Map(
+      Object.entries(notes.map).map(([slug, note]) => [slug, note.tags]),
+    );
 
-    const base = domainAnalyses.filter((d) => {
-      if (verdict !== "all" && d.verdict !== verdict) return false;
-      if (tld !== "all" && d.tld !== tld) return false;
-      if (tagFilter && !(notes.get(d.slug)?.tags.includes(tagFilter) ?? false)) return false;
-      if (onlyWatched && !watched.has(d.slug)) return false;
-      const isHidden = hiddenSet.has(d.slug);
-      if (isHidden && !showHidden) return false;
-      if (!isHidden && showHidden) return false;
-      if (q && !d.domain.toLowerCase().includes(q) && !d.source.toLowerCase().includes(q)) return false;
-      return true;
-    });
-
-    const dir = sortDir === "asc" ? 1 : -1;
-    return base.sort((a, b) => {
-      switch (sortKey) {
-        case "domain":
-          return a.domain.localeCompare(b.domain) * dir;
-        case "expires":
-          return (expiryInfo(a.expiresAt).days - expiryInfo(b.expiresAt).days) * dir;
-        case "value":
-          return (parseValue(a.estimatedValue) - parseValue(b.estimatedValue)) * dir;
-        case "score":
-        default:
-          return (a.totalScore - b.totalScore) * dir;
-      }
-    });
-  }, [query, verdict, tld, tagFilter, onlyWatched, showHidden, sortKey, sortDir, watchlist.slugs, hidden.values, notes.map]);
+    return getQueueRows(
+      domainAnalyses,
+      { query, verdict, tld, tagFilter, onlyWatched, showHidden },
+      sortKey,
+      sortDir,
+      watchlist.values,
+      hidden.values,
+      tagMap,
+    );
+  }, [query, verdict, tld, tagFilter, onlyWatched, showHidden, sortKey, sortDir, watchlist.values, hidden.values, notes.map]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount - 1);
   const pageRows = filtered.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE);
 
-  const visibleSelectedCount = pageRows.filter((r) => selected.has(r.slug)).length;
+  const visibleSelectedCount = pageRows.filter((row) => selected.has(row.slug)).length;
   const allOnPageSelected = pageRows.length > 0 && visibleSelectedCount === pageRows.length;
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+  const toggleSort = (key: QueueSortKey) => {
+    if (sortKey === key) setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
     else {
       setSortKey(key);
       setSortDir(key === "domain" ? "asc" : "desc");
@@ -125,8 +97,8 @@ export function QueuePage() {
   };
 
   const toggleSelection = (slug: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
+    setSelected((current) => {
+      const next = new Set(current);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
       return next;
@@ -134,10 +106,10 @@ export function QueuePage() {
   };
 
   const toggleSelectPage = () => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allOnPageSelected) pageRows.forEach((r) => next.delete(r.slug));
-      else pageRows.forEach((r) => next.add(r.slug));
+    setSelected((current) => {
+      const next = new Set(current);
+      if (allOnPageSelected) pageRows.forEach((row) => next.delete(row.slug));
+      else pageRows.forEach((row) => next.add(row.slug));
       return next;
     });
   };
@@ -146,8 +118,8 @@ export function QueuePage() {
 
   const bulkWatch = () => {
     const slugs = Array.from(selected);
-    slugs.forEach((s) => {
-      if (!watchlist.has(s)) watchlist.add(s);
+    slugs.forEach((slug) => {
+      if (!watchlist.has(slug)) watchlist.add(slug);
     });
     toast.success(`Bevakar ${slugs.length} domäner`);
     clearSelection();
@@ -169,19 +141,19 @@ export function QueuePage() {
 
   const bulkExport = () => {
     const slugs = Array.from(selected);
-    const rows = domainAnalyses.filter((d) => slugs.includes(d.slug));
+    const rows = domainAnalyses.filter((domain) => slugs.includes(domain.slug));
     const csv = [
       "domain,score,verdict,expires,source,value",
-      ...rows.map((r) =>
-        [r.domain, r.totalScore, r.verdict, r.expiresAt, r.source, r.estimatedValue].join(","),
+      ...rows.map((row) =>
+        [row.domain, row.totalScore, row.verdict, row.expiresAt, row.source, row.estimatedValue].join(","),
       ),
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `snaptld-urval-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `snaptld-urval-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
     URL.revokeObjectURL(url);
     toast.success(`Exporterat ${rows.length} domäner`);
     clearSelection();
@@ -208,12 +180,10 @@ export function QueuePage() {
           subtitle="Alla analyserade domäner. Filtrera, sortera, markera — och agera i grupp."
         />
         <div className="flex items-center gap-3 text-xs text-muted">
-          {reviewed.hydrated && reviewed.count > 0 && (
-            <span>{reviewed.count} granskade</span>
-          )}
+          {reviewed.hydrated && reviewed.count > 0 && <span>{reviewed.count} granskade</span>}
           {hidden.hydrated && hidden.count > 0 && (
             <button
-              onClick={() => setShowHidden((v) => !v)}
+              onClick={() => setShowHidden((value) => !value)}
               className="inline-flex items-center gap-1 hover:text-fg"
             >
               {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -230,22 +200,22 @@ export function QueuePage() {
             <Input
               className="pl-9"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder="Sök domän eller källa…"
             />
           </div>
 
           <div className="flex gap-1 rounded-lg border bg-surface p-1">
-            {verdictFilters.map((f) => (
+            {verdictFilters.map((filter) => (
               <button
-                key={f.id}
-                onClick={() => setVerdict(f.id)}
+                key={filter.id}
+                onClick={() => setVerdict(filter.id)}
                 className={clsx(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                  verdict === f.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                  verdict === filter.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
                 )}
               >
-                {f.label}
+                {filter.label}
               </button>
             ))}
           </div>
@@ -260,22 +230,22 @@ export function QueuePage() {
             >
               Alla TLD
             </button>
-            {uniqueTlds.map((t) => (
+            {uniqueTlds.map((value) => (
               <button
-                key={t}
-                onClick={() => setTld(t)}
+                key={value}
+                onClick={() => setTld(value)}
                 className={clsx(
                   "rounded-md px-2 py-1 font-mono text-xs font-medium transition-colors",
-                  tld === t ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                  tld === value ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
                 )}
               >
-                {t}
+                {value}
               </button>
             ))}
           </div>
 
           <button
-            onClick={() => setOnlyWatched((v) => !v)}
+            onClick={() => setOnlyWatched((value) => !value)}
             className={clsx(
               "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
               onlyWatched ? "border-fg bg-fg text-bg" : "bg-surface text-muted hover:bg-bg hover:text-fg",
@@ -293,16 +263,16 @@ export function QueuePage() {
           {allTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 border-l pl-2">
               <span className="text-[11px] text-muted">Taggar:</span>
-              {allTags.map((t) => (
+              {allTags.map((tag) => (
                 <button
-                  key={t}
-                  onClick={() => setTagFilter(tagFilter === t ? null : t)}
+                  key={tag}
+                  onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
                   className={clsx(
                     "rounded-md px-2 py-0.5 text-xs font-medium transition-colors",
-                    tagFilter === t ? "bg-fg text-bg" : "border bg-surface text-muted hover:text-fg",
+                    tagFilter === tag ? "bg-fg text-bg" : "border bg-surface text-muted hover:text-fg",
                   )}
                 >
-                  #{t}
+                  #{tag}
                 </button>
               ))}
             </div>
@@ -378,12 +348,12 @@ export function QueuePage() {
               </Td>
             </tr>
           )}
-          {pageRows.map((d) => {
-            const isSelected = selected.has(d.slug);
-            const isReviewed = reviewed.has(d.slug);
+          {pageRows.map((domain) => {
+            const isSelected = selected.has(domain.slug);
+            const isReviewed = reviewed.has(domain.slug);
             return (
               <tr
-                key={d.slug}
+                key={domain.slug}
                 className={clsx(
                   "transition-colors hover:bg-bg/50",
                   isSelected && "bg-fg/[0.03]",
@@ -393,56 +363,56 @@ export function QueuePage() {
                 <Td className="pr-0">
                   <Checkbox
                     checked={isSelected}
-                    onChange={() => toggleSelection(d.slug)}
-                    ariaLabel={`Välj ${d.domain}`}
+                    onChange={() => toggleSelection(domain.slug)}
+                    ariaLabel={`Välj ${domain.domain}`}
                   />
                 </Td>
                 <Td className="pr-0">
-                  <WatchButton slug={d.slug} domain={d.domain} variant="icon" />
+                  <WatchButton slug={domain.slug} domain={domain.domain} variant="icon" />
                 </Td>
                 <Td>
-                  <Link href={`/snaptld/${d.slug}`} className="block">
+                  <Link href={`/snaptld/${domain.slug}`} className="block">
                     <div className="flex items-center gap-2 font-medium hover:underline">
-                      {d.domain}
+                      {domain.domain}
                       {isReviewed && (
                         <span className="rounded bg-fg/5 px-1 text-[10px] font-medium uppercase tracking-wider text-muted">
                           Granskad
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted">Hämtad {d.fetchedAt}</div>
+                    <div className="text-xs text-muted">Hämtad {domain.fetchedAt}</div>
                   </Link>
                 </Td>
                 <Td>
-                  <VerdictBadge verdict={d.verdict} />
+                  <VerdictBadge verdict={domain.verdict} />
                 </Td>
                 <Td>
-                  <ScoreBar score={d.totalScore} showValue />
+                  <ScoreBar score={domain.totalScore} showValue />
                 </Td>
                 <Td>
-                  <ExpiryBadge expiresAt={d.expiresAt} variant="long" />
+                  <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
                 </Td>
-                <Td className="text-xs capitalize text-muted">{d.source.replace("-", " ")}</Td>
-                <Td className="text-right text-xs font-medium">{d.estimatedValue}</Td>
+                <Td className="text-xs capitalize text-muted">{domain.source.replace("-", " ")}</Td>
+                <Td className="text-right text-xs font-medium">{domain.estimatedValue}</Td>
                 <Td>
                   <RowMenu
                     items={[
-                      { label: "Öppna detalj", onClick: () => window.location.assign(`/snaptld/${d.slug}`) },
-                      { label: "Kör om analys", icon: RefreshCcw, onClick: () => toast.info("Analys kölagd", d.domain) },
-                      { label: "Exportera rapport", icon: Download, onClick: () => toast.success("Rapport nedladdad", d.domain) },
+                      { label: "Öppna detalj", onClick: () => window.location.assign(`/snaptld/${domain.slug}`) },
+                      { label: "Kör om analys", icon: RefreshCcw, onClick: () => toast.info("Analys kölagd", domain.domain) },
+                      { label: "Exportera rapport", icon: Download, onClick: () => toast.success("Rapport nedladdad", domain.domain) },
                       { divider: true },
                       {
                         label: isReviewed ? "Ångra granskad" : "Markera granskad",
                         icon: Eye,
-                        onClick: () => reviewed.toggle(d.slug),
+                        onClick: () => reviewed.toggle(domain.slug),
                       },
                       {
-                        label: hidden.has(d.slug) ? "Visa igen" : "Dölj domän",
-                        icon: hidden.has(d.slug) ? Eye : EyeOff,
-                        onClick: () => hidden.toggle(d.slug),
+                        label: hidden.has(domain.slug) ? "Visa igen" : "Dölj domän",
+                        icon: hidden.has(domain.slug) ? Eye : EyeOff,
+                        onClick: () => hidden.toggle(domain.slug),
                       },
                       { divider: true },
-                      { label: "Ta bort", icon: Trash2, danger: true, onClick: () => toast.error("Borttagen", d.domain) },
+                      { label: "Ta bort", icon: Trash2, danger: true, onClick: () => toast.error("Borttagen", domain.domain) },
                     ]}
                   />
                 </Td>
@@ -513,7 +483,7 @@ function SortableTh({
 }: {
   children: React.ReactNode;
   active: boolean;
-  dir: SortDir;
+  dir: QueueSortDir;
   onClick: () => void;
   className?: string;
 }) {
@@ -527,11 +497,7 @@ function SortableTh({
         )}
       >
         {children}
-        {active ? (
-          dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />
-        ) : (
-          <span className="inline-block h-[10px] w-[10px]" />
-        )}
+        {active ? (dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />) : <span className="inline-block h-[10px] w-[10px]" />}
       </button>
     </Th>
   );

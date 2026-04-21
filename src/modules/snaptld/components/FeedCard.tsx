@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Table";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input, Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
-import type { FeedSource } from "@/modules/snaptld/data/feeds";
+import type { FeedSource } from "@/modules/snaptld/types";
 
 const cadencePresets = [
   { id: "hourly", label: "Varje timme", value: "Varje timme" },

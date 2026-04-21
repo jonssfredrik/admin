@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import clsx from "clsx";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useToast } from "@/components/toast/ToastProvider";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { useToast } from "@/components/toast/ToastProvider";
 import { CalendarSummaryCards } from "@/modules/calendar/components/CalendarSummaryCards";
+import { CalendarViewNav } from "@/modules/calendar/components/CalendarViewNav";
 import { DayEventsDialog } from "@/modules/calendar/components/DayEventsDialog";
 import { EventContent } from "@/modules/calendar/components/EventContent";
 import { EventDetailsDialog } from "@/modules/calendar/components/EventDetailsDialog";
@@ -72,7 +72,9 @@ export function MonthPage() {
   const daysInMonth = monthEnd.getDate();
   const cells: (Date | null)[] = [];
   for (let index = 0; index < firstWeekday; index++) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(viewDate.getFullYear(), viewDate.getMonth(), day));
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push(new Date(viewDate.getFullYear(), viewDate.getMonth(), day));
+  }
   while (cells.length % 7 !== 0) cells.push(null);
 
   const handleCreate = (values: Omit<CalendarEvent, "id" | "source">) => {
@@ -107,21 +109,7 @@ export function MonthPage() {
           subtitle="Samlad månadsvy för egna händelser, abonnemang, fakturor och domändatum."
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/calendar" className="inline-flex h-9 items-center rounded-lg bg-fg px-3 text-sm font-medium text-bg">
-            Månad
-          </Link>
-          <Link
-            href="/calendar/week"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Vecka
-          </Link>
-          <Link
-            href="/calendar/agenda"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Agenda
-          </Link>
+          <CalendarViewNav current="month" />
           <Button
             onClick={() => {
               setDefaultDate(todayISO());

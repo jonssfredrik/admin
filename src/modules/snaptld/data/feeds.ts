@@ -1,14 +1,4 @@
-export interface FeedSource {
-  id: string;
-  name: string;
-  url: string;
-  type: "json" | "csv" | "rss";
-  tld: string;
-  status: "active" | "paused" | "error";
-  lastFetched: string;
-  domainsLastRun: number;
-  cadence: string;
-}
+import type { FeedSource, Report } from "@/modules/snaptld/types";
 
 export const feedSources: FeedSource[] = [
   {
@@ -57,16 +47,7 @@ export const feedSources: FeedSource[] = [
   },
 ];
 
-export interface ReportEntry {
-  id: string;
-  title: string;
-  generatedAt: string;
-  domains: number;
-  highlight: string;
-  format: "pdf" | "csv" | "json";
-}
-
-export const reports: ReportEntry[] = [
+export const reports: Report[] = [
   {
     id: "r-2026-04-19",
     title: "Dagsrapport 19 april",

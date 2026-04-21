@@ -7,13 +7,17 @@ import {
   type AnalysisCategory,
   type CategoryResult,
 } from "@/modules/snaptld/data/core";
+import { StepCardHeader } from "./StepCardHeader";
 
 interface Props {
   category: AnalysisCategory;
   result: CategoryResult;
+  weight: number;
+  onRun: () => void;
+  isRunning?: boolean;
 }
 
-export function CategoryTab({ category, result }: Props) {
+export function CategoryTab({ category, result, weight, onRun, isRunning }: Props) {
   const meta = categoryMeta[category];
 
   return (
@@ -23,16 +27,19 @@ export function CategoryTab({ category, result }: Props) {
           <BigScoreRing score={result.score} />
           <div className="text-center">
             <div className="text-sm font-semibold">{meta.label}</div>
-            <div className="mt-0.5 text-xs text-muted">Vikt {result.weight}% av total</div>
+            <div className="mt-0.5 text-xs text-muted">Vikt {weight}% av total</div>
           </div>
         </div>
       </Card>
 
       <Card className="lg:col-span-2 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">Signaler</h2>
-          <p className="text-xs text-muted">{meta.description}</p>
-        </div>
+        <StepCardHeader
+          title="Signaler"
+          description={meta.description}
+          actionLabel={`Kör ${meta.label}`}
+          onRun={onRun}
+          running={isRunning}
+        />
         <SignalList signals={result.signals} />
         {result.verdict && (
           <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-fg/10 bg-fg/5 p-3.5 text-sm">

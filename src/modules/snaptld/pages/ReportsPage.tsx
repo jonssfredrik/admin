@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { Download, FileText, Printer } from "lucide-react";
+import { Download, Eye, FileText, Printer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
@@ -62,8 +63,10 @@ export function ReportsPage() {
           {reports.map((r) => (
             <tr key={r.id} className="transition-colors hover:bg-bg/50">
               <Td>
-                <div className="font-medium">{r.title}</div>
-                <div className="text-xs text-muted">{r.id}</div>
+                <Link href={`/snaptld/reports/${r.id}`} className="block">
+                  <div className="font-medium hover:underline">{r.title}</div>
+                  <div className="text-xs text-muted">{r.id}</div>
+                </Link>
               </Td>
               <Td className="font-mono text-xs tabular-nums text-muted">{r.generatedAt}</Td>
               <Td className="text-right font-medium tabular-nums">{r.domains.toLocaleString("sv-SE")}</Td>
@@ -74,6 +77,7 @@ export function ReportsPage() {
               <Td>
                 <RowMenu
                   items={[
+                    { label: "Öppna", icon: Eye, onClick: () => window.location.assign(`/snaptld/reports/${r.id}`) },
                     { label: "Ladda ner", icon: Download, onClick: () => download(r.id) },
                     { label: "Skriv ut", icon: Printer, onClick: () => window.print() },
                   ]}

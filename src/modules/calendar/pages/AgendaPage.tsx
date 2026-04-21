@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import clsx from "clsx";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useToast } from "@/components/toast/ToastProvider";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
-import { useToast } from "@/components/toast/ToastProvider";
 import { CalendarSummaryCards } from "@/modules/calendar/components/CalendarSummaryCards";
+import { CalendarViewNav } from "@/modules/calendar/components/CalendarViewNav";
 import { EventDetailsDialog } from "@/modules/calendar/components/EventDetailsDialog";
 import { EventDialog } from "@/modules/calendar/components/EventDialog";
 import { EventSourceFilter } from "@/modules/calendar/components/EventSourceFilter";
@@ -27,11 +27,13 @@ import {
   type ResolvedCalendarEvent,
 } from "@/modules/calendar/data/core";
 import { useCalendarFeed } from "@/modules/calendar/lib/useCalendarFeed";
+import { useCalendarSettings } from "@/modules/calendar/lib/useCalendarSettings";
 import { useCalendarViewState } from "@/modules/calendar/lib/viewState";
 
 export function AgendaPage() {
   const toast = useToast();
   const { hydrated: viewHydrated, state: viewState, setAgendaStartDate, setSources } = useCalendarViewState();
+  const { settings } = useCalendarSettings();
   const [startDate, setStartDate] = useState(todayISO());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -43,7 +45,8 @@ export function AgendaPage() {
     setStartDate(viewState.agendaStartDate);
   }, [viewHydrated, viewState.agendaStartDate]);
 
-  const endDate = toISODate(addDays(new Date(`${startDate}T00:00:00`), 29));
+  const agendaWindowDays = settings.agendaDefaultDays;
+  const endDate = toISODate(addDays(new Date(`${startDate}T00:00:00`), agendaWindowDays - 1));
   const enabledSources = (Object.entries(viewState.sources) as [EventSource, boolean][])
     .filter(([, enabled]) => enabled)
     .map(([source]) => source);
@@ -90,27 +93,10 @@ export function AgendaPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <PageHeader
           title="Kalender"
-          subtitle="Agenda för de kommande 30 dagarna, grupperad per dag."
+          subtitle={`Agenda för de kommande ${agendaWindowDays} dagarna, grupperad per dag.`}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/calendar"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Månad
-          </Link>
-          <Link
-            href="/calendar/week"
-            className="inline-flex h-9 items-center rounded-lg border bg-surface px-3 text-sm text-muted transition-colors hover:bg-bg hover:text-fg"
-          >
-            Vecka
-          </Link>
-          <Link
-            href="/calendar/agenda"
-            className="inline-flex h-9 items-center rounded-lg bg-fg px-3 text-sm font-medium text-bg"
-          >
-            Agenda
-          </Link>
+          <CalendarViewNav current="agenda" />
           <Button
             onClick={() => {
               setDefaultDate(startDate);
@@ -157,12 +143,12 @@ export function AgendaPage() {
               variant="secondary"
               className="h-8 px-3 text-xs"
               onClick={() => {
-                const next = toISODate(addDays(new Date(), 29));
+                const next = toISODate(addDays(new Date(), agendaWindowDays - 1));
                 setStartDate(next);
                 setAgendaStartDate(next);
               }}
             >
-              Nästa 30 dagar
+              Nästa {agendaWindowDays} dagar
             </Button>
           </div>
           <div className="text-sm text-muted">
@@ -181,7 +167,9 @@ export function AgendaPage() {
               setAgendaStartDate(event.target.value);
             }}
           />
-          <p className="mt-2 text-xs text-muted">Listan omfattar alltid 30 dagar framåt från valt startdatum.</p>
+          <p className="mt-2 text-xs text-muted">
+            Listan omfattar alltid {agendaWindowDays} dagar framåt från valt startdatum.
+          </p>
         </Card>
       </div>
 
@@ -233,15 +221,15 @@ export function AgendaPage() {
                             {category.label}
                           </span>
                         </span>
-                        {event.description ? (
-                          <span className="mt-1 block text-sm text-muted">{event.description}</span>
-                        ) : null}
+                        {event.description ? <span className="mt-1 block text-sm text-muted">{event.description}</span> : null}
                         {event.statusLabel || event.sourceDetail || (event.recurrence && event.recurrence !== "none") ? (
                           <span className="mt-1 block text-xs text-muted">
                             {event.statusLabel ?? ""}
                             {event.statusLabel && event.sourceDetail ? " · " : ""}
                             {event.sourceDetail ?? ""}
-                            {(event.statusLabel || event.sourceDetail) && event.recurrence && event.recurrence !== "none" ? " · " : ""}
+                            {(event.statusLabel || event.sourceDetail) && event.recurrence && event.recurrence !== "none"
+                              ? " · "
+                              : ""}
                             {event.recurrence && event.recurrence !== "none" ? "Återkommande" : ""}
                           </span>
                         ) : null}
