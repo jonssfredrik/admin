@@ -21,10 +21,12 @@ export function getImportedUniqueSources(records: ImportedDomainRecord[]) {
 }
 
 export function getImportedStats(records: ImportedDomainRecord[]) {
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const analyzed = records.filter((record) => record.status === "analyzed").length;
   const running = records.filter((record) => record.status === "running").length;
   const uniqueBatches = new Set(records.map((record) => record.batchId)).size;
-  const importedToday = records.filter((record) => record.importedAt.startsWith("2026-04-19")).length;
+  const importedToday = records.filter((record) => record.importedAt.startsWith(todayKey)).length;
   return { analyzed, running, uniqueBatches, importedToday };
 }
 
@@ -66,4 +68,3 @@ export function getImportedRows(
       }
     });
 }
-

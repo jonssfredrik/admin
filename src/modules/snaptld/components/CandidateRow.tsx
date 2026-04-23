@@ -5,7 +5,8 @@ import { ScoreBar } from "./ScoreBar";
 import { VerdictBadge } from "./VerdictBadge";
 import { ExpiryBadge } from "./ExpiryBadge";
 import { WatchButton } from "./WatchButton";
-import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
+import { formatMoneyRange } from "@/modules/snaptld/lib/format";
 
 const tldStyles: Record<string, string> = {
   ".se": "bg-blue-500/10 text-blue-700 dark:text-blue-300",
@@ -36,7 +37,7 @@ export function CandidateRow({ domain }: { domain: DomainAnalysis }) {
           <VerdictBadge verdict={domain.verdict} />
           <ExpiryBadge expiresAt={domain.expiresAt} />
         </div>
-        <div className="mt-0.5 truncate text-xs text-muted">{domain.estimatedValue}</div>
+        <div className="mt-0.5 truncate text-xs text-muted">{formatMoneyRange(domain.estimatedValue)}</div>
       </div>
       <div className="w-40 shrink-0">
         <ScoreBar score={domain.totalScore} showValue />

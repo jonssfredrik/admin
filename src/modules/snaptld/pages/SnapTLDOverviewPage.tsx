@@ -10,23 +10,53 @@ import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { useToast } from "@/components/toast/ToastProvider";
-import { domainAnalyses, scoreTrend, volumePerDay } from "@/modules/snaptld/data/core";
-import { feedSources } from "@/modules/snaptld/data/feeds";
 import { CandidateRow } from "@/modules/snaptld/components/CandidateRow";
 import { ImportDialog } from "@/modules/snaptld/components/ImportDialog";
 import { AnalysisProgress } from "@/modules/snaptld/components/AnalysisProgress";
 import { NewSinceBanner } from "@/modules/snaptld/components/NewSinceBanner";
+import { SnapTldUserStateProvider } from "@/modules/snaptld/client/SnapTldUserStateProvider";
 import { getActiveFeedCount, getOverviewStats, getRunningDomain, getTopCandidates, getVerdictDonut } from "@/modules/snaptld/selectors/overview";
+import type { DomainAnalysis, FeedSource, SnapTldUserState } from "@/modules/snaptld/types";
 
-export function SnapTLDOverviewPage() {
+export function SnapTLDOverviewPage({
+  domains,
+  feeds,
+  scoreTrend,
+  volumePerDay,
+  initialUserState,
+}: {
+  domains: DomainAnalysis[];
+  feeds: FeedSource[];
+  scoreTrend: { label: string; value: number }[];
+  volumePerDay: { label: string; value: number }[];
+  initialUserState: SnapTldUserState;
+}) {
+  return (
+    <SnapTldUserStateProvider initialState={initialUserState}>
+      <SnapTLDOverviewPageContent domains={domains} feeds={feeds} scoreTrend={scoreTrend} volumePerDay={volumePerDay} />
+    </SnapTldUserStateProvider>
+  );
+}
+
+function SnapTLDOverviewPageContent({
+  domains,
+  feeds,
+  scoreTrend,
+  volumePerDay,
+}: {
+  domains: DomainAnalysis[];
+  feeds: FeedSource[];
+  scoreTrend: { label: string; value: number }[];
+  volumePerDay: { label: string; value: number }[];
+}) {
   const toast = useToast();
   const [importOpen, setImportOpen] = useState(false);
 
-  const stats = useMemo(() => getOverviewStats(domainAnalyses), []);
-  const topCandidates = useMemo(() => getTopCandidates(domainAnalyses), []);
-  const verdictDonut = useMemo(() => getVerdictDonut(domainAnalyses), []);
-  const activeFeeds = useMemo(() => getActiveFeedCount(feedSources), []);
-  const running = useMemo(() => getRunningDomain(domainAnalyses), []);
+  const stats = useMemo(() => getOverviewStats(domains), [domains]);
+  const topCandidates = useMemo(() => getTopCandidates(domains), [domains]);
+  const verdictDonut = useMemo(() => getVerdictDonut(domains), [domains]);
+  const activeFeeds = useMemo(() => getActiveFeedCount(feeds), [feeds]);
+  const running = useMemo(() => getRunningDomain(domains), [domains]);
 
   return (
     <div className="space-y-8">
@@ -51,13 +81,13 @@ export function SnapTLDOverviewPage() {
         </div>
       </div>
 
-      <NewSinceBanner />
+      <NewSinceBanner domains={domains} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Analyserade idag" value={String(stats.total)} delta={12} hint="Över alla källor" />
         <StatCard label="Topp-kandidater" value={String(stats.excellent + stats.good)} delta={8} hint={`${stats.excellent} utmärkta · ${stats.good} bra`} />
         <StatCard label="Snittscore" value={String(stats.avg)} delta={3} hint="Av 100" />
-        <StatCard label="Aktiva feeds" value={`${activeFeeds}/${feedSources.length}`} hint="Körs automatiskt" />
+        <StatCard label="Aktiva feeds" value={`${activeFeeds}/${feeds.length}`} hint="Körs automatiskt" />
       </div>
 
       {running && <AnalysisProgress completed={5} />}

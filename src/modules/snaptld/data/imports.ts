@@ -1,6 +1,6 @@
-import type { ImportedDomainRecord } from "@/modules/snaptld/types";
+import type { RawImportedDomainRecord } from "@/modules/snaptld/types";
 
-export const importedDomains: ImportedDomainRecord[] = [
+export const importedDomains: RawImportedDomainRecord[] = [
   {
     slug: "nordbyte",
     domain: "nordbyte.se",

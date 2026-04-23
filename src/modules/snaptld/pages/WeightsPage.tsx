@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Minus, RotateCcw, Save } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/toast/ToastProvider";
-import { defaultWeightsYaml } from "@/modules/snaptld/data/weights";
-import { categoryMeta, domainAnalyses, type AnalysisCategory } from "@/modules/snaptld/data/core";
+import { categoryMeta, type AnalysisCategory } from "@/modules/snaptld/data/core";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
 import {
   buildWeightRanking,
@@ -16,52 +15,53 @@ import {
   parseWeightsConfig,
   updateWeightInYaml,
 } from "@/modules/snaptld/selectors/weights";
-import { useActiveWeights } from "@/modules/snaptld/lib/activeWeights";
-import { useMockActionState, waitForMockAction } from "@/modules/snaptld/lib/useMockActionState";
+import { resetWeightsAction, saveWeightsAction } from "@/modules/snaptld/actions";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 
-export function WeightsPage() {
+export function WeightsPage({
+  domains,
+  initialYaml,
+}: {
+  domains: DomainAnalysis[];
+  initialYaml: string;
+}) {
   const toast = useToast();
-  const activeWeights = useActiveWeights();
-  const saveAction = useMockActionState();
-  const resetAction = useMockActionState();
-  const [yaml, setYaml] = useState(defaultWeightsYaml);
-
-  const saved = activeWeights.hydrated ? activeWeights.value : defaultWeightsYaml;
-
-  useEffect(() => {
-    if (!activeWeights.hydrated) return;
-    setYaml(activeWeights.value);
-  }, [activeWeights.hydrated, activeWeights.value]);
+  const saveAction = useAsyncAction();
+  const resetAction = useAsyncAction();
+  const [savedYaml, setSavedYaml] = useState(initialYaml);
+  const [yaml, setYaml] = useState(initialYaml);
 
   const draftConfig = useMemo(() => parseWeightsConfig(yaml), [yaml]);
-  const appliedConfig = useMemo(() => parseWeightsConfig(saved), [saved]);
+  const appliedConfig = useMemo(() => parseWeightsConfig(savedYaml), [savedYaml]);
   const weightEntries = useMemo(() => getWeightEntries(draftConfig.weights), [draftConfig.weights]);
   const ranking = useMemo(
-    () => buildWeightRanking(domainAnalyses, appliedConfig.weights, draftConfig.weights),
-    [appliedConfig.weights, draftConfig.weights],
+    () => buildWeightRanking(domains, appliedConfig.weights, draftConfig.weights),
+    [domains, appliedConfig.weights, draftConfig.weights],
   );
-  const dirty = yaml !== saved;
+  const dirty = yaml !== savedYaml;
   const movers = ranking.filter((row) => row.currentRank !== row.nextRank).length;
 
   const handleReset = async () => {
     try {
-      await resetAction.run(async () => {
-        await waitForMockAction(250);
-        activeWeights.reset();
-        setYaml(defaultWeightsYaml);
-      });
+      const next = await resetAction.run(() => resetWeightsAction());
+      setSavedYaml(next);
+      setYaml(next);
       toast.info("Återställd", "Standardvikter laddade");
-    } catch {}
+    } catch (error) {
+      toast.error("Kunde inte återställa vikter", error instanceof Error ? error.message : "Försök igen");
+    }
   };
 
   const handleSave = async () => {
     try {
-      await saveAction.run(async () => {
-        await waitForMockAction(350);
-        activeWeights.save(yaml);
-      });
-      toast.success("Sparat", "Det lokala frontend-utkastet är nu aktivt");
-    } catch {}
+      const next = await saveAction.run(() => saveWeightsAction(yaml));
+      setSavedYaml(next);
+      setYaml(next);
+      toast.success("Sparat", "Det aktiva utkastet är nu sparat på serversidan");
+    } catch (error) {
+      toast.error("Kunde inte spara vikter", error instanceof Error ? error.message : "Försök igen");
+    }
   };
 
   const handleWeightChange = (key: AnalysisCategory, nextValue: number) => {
@@ -73,7 +73,7 @@ export function WeightsPage() {
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           title="Scoring-vikter"
-          subtitle="Anpassa den frontend-mockade viktkonfigurationen som styr scoring och preview."
+          subtitle="Anpassa viktkonfigurationen som styr scoring och preview."
         />
         <div className="flex gap-2">
           <Button
@@ -87,7 +87,7 @@ export function WeightsPage() {
           </Button>
           <Button
             className="gap-1.5"
-            disabled={yaml === saved || saveAction.isPending}
+            disabled={yaml === savedYaml || saveAction.isPending}
             onClick={handleSave}
           >
             <Save size={14} />
@@ -141,7 +141,7 @@ export function WeightsPage() {
             ))}
           </div>
           <div className="mt-5 rounded-lg border bg-bg/40 p-3 text-xs text-muted">
-            Spara uppdaterar bara den lokala frontend-konfigurationen. Ingen fil eller backend skrivs ännu.
+            Spara uppdaterar det serverförberedda viktutkastet. Ingen extern backend krävs ännu.
           </div>
         </Card>
       </div>

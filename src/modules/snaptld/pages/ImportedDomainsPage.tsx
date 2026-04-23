@@ -17,8 +17,10 @@ import { ImportDialog } from "@/modules/snaptld/components/ImportDialog";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
 import { VerdictBadge } from "@/modules/snaptld/components/VerdictBadge";
 import { WatchButton } from "@/modules/snaptld/components/WatchButton";
-import { importedDomains } from "@/modules/snaptld/data/imports";
+import { SnapTldUserStateProvider } from "@/modules/snaptld/client/SnapTldUserStateProvider";
+import { formatDateTime, formatMoneyRange } from "@/modules/snaptld/lib/format";
 import { getImportedRows, getImportedStats, getImportedUniqueSources, getImportedUniqueTlds, type ImportedSortDir, type ImportedSortKey } from "@/modules/snaptld/selectors/imports";
+import type { ImportedDomainRecord, SnapTldUserState } from "@/modules/snaptld/types";
 
 const statusMeta = {
   analyzed: { label: "Analyserad", tone: "success" },
@@ -42,19 +44,9 @@ const statusFilters = [
   { id: "failed", label: "Misslyckade" },
 ] as const;
 
-function formatDateTime(value: string) {
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("sv-SE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function exportCsv(rows = importedDomains) {
+function exportCsv(rows: ImportedDomainRecord[]) {
   const csv = [
-    "domain,status,source,imported_at,expires_at,score,value,batch_id",
+    "domain,status,source,imported_at,expires_at,score,value_min,value_max,currency,batch_id",
     ...rows.map((row) =>
       [
         row.domain,
@@ -63,7 +55,9 @@ function exportCsv(rows = importedDomains) {
         row.importedAt,
         row.expiresAt,
         row.totalScore,
-        row.estimatedValue,
+        row.estimatedValue.min,
+        row.estimatedValue.max,
+        row.estimatedValue.currency,
         row.batchId,
       ].join(","),
     ),
@@ -77,22 +71,36 @@ function exportCsv(rows = importedDomains) {
   URL.revokeObjectURL(url);
 }
 
-export function ImportedDomainsPage() {
+export function ImportedDomainsPage({
+  domains,
+  initialUserState,
+}: {
+  domains: ImportedDomainRecord[];
+  initialUserState: SnapTldUserState;
+}) {
+  return (
+    <SnapTldUserStateProvider initialState={initialUserState}>
+      <ImportedDomainsPageContent domains={domains} />
+    </SnapTldUserStateProvider>
+  );
+}
+
+function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord[] }) {
   const toast = useToast();
   const [importOpen, setImportOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statusFilters)[number]["id"]>("all");
-  const [source, setSource] = useState<"all" | (typeof importedDomains)[number]["source"]>("all");
+  const [source, setSource] = useState<"all" | ImportedDomainRecord["source"]>("all");
   const [tld, setTld] = useState<"all" | string>("all");
   const [sortKey, setSortKey] = useState<ImportedSortKey>("importedAt");
   const [sortDir, setSortDir] = useState<ImportedSortDir>("desc");
 
-  const uniqueTlds = useMemo(() => getImportedUniqueTlds(importedDomains), []);
-  const uniqueSources = useMemo(() => getImportedUniqueSources(importedDomains), []);
-  const stats = useMemo(() => getImportedStats(importedDomains), []);
+  const uniqueTlds = useMemo(() => getImportedUniqueTlds(domains), [domains]);
+  const uniqueSources = useMemo(() => getImportedUniqueSources(domains), [domains]);
+  const stats = useMemo(() => getImportedStats(domains), [domains]);
   const filtered = useMemo(
-    () => getImportedRows(importedDomains, { query, status, source, tld }, sortKey, sortDir),
-    [query, status, source, tld, sortKey, sortDir],
+    () => getImportedRows(domains, { query, status, source, tld }, sortKey, sortDir),
+    [domains, query, status, source, tld, sortKey, sortDir],
   );
 
   const activeFilters =
@@ -141,7 +149,7 @@ export function ImportedDomainsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Domäner i databasen" value={String(importedDomains.length)} hint="Mockad totalvolym" />
+        <StatCard label="Domäner i databasen" value={String(domains.length)} hint="Mockad totalvolym" />
         <StatCard label="Importerade idag" value={String(stats.importedToday)} delta={9} hint="Senaste batchkörningen" />
         <StatCard label="Analyserade" value={String(stats.analyzed)} hint={`${stats.running} körs just nu`} />
         <StatCard label="Importbatcher" value={String(stats.uniqueBatches)} hint="Över alla källor" />

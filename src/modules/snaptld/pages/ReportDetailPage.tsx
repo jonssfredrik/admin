@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
-import { notFound } from "next/navigation";
 import { ArrowLeft, Download, FileText, Printer } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/toast/ToastProvider";
-import { reports } from "@/modules/snaptld/data/feeds";
+import { formatDateTime } from "@/modules/snaptld/lib/format";
+import type { Report } from "@/modules/snaptld/types";
 
 const formatTone = {
   pdf: "danger",
@@ -17,21 +16,17 @@ const formatTone = {
   json: "warning",
 } as const;
 
-export function ReportDetailPage({ params }: { params: Promise<{ reportId: string }> }) {
-  const { reportId } = use(params);
+export function ReportDetailPage({ report }: { report: Report }) {
   const toast = useToast();
-  const report = reports.find((entry) => entry.id === reportId);
-
-  if (!report) notFound();
 
   const download = () => {
     const payload = JSON.stringify({ report: report.id, generatedAt: report.generatedAt }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${report.id}.json`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${report.id}.json`;
+    anchor.click();
     URL.revokeObjectURL(url);
     toast.success("Rapport nedladdad", report.title);
   };
@@ -66,7 +61,7 @@ export function ReportDetailPage({ params }: { params: Promise<{ reportId: strin
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
           <div className="text-xs font-medium uppercase tracking-wider text-muted">Genererad</div>
-          <div className="mt-2 font-mono text-sm tabular-nums">{report.generatedAt}</div>
+          <div className="mt-2 font-mono text-sm tabular-nums">{formatDateTime(report.generatedAt)}</div>
         </Card>
         <Card>
           <div className="text-xs font-medium uppercase tracking-wider text-muted">Domäner</div>

@@ -2,7 +2,7 @@ import { AlertTriangle, Clock, ExternalLink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Table";
 import { SignalList } from "@/modules/snaptld/components/SignalList";
-import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { StepCardHeader } from "./StepCardHeader";
 
 export function HistoryTab({

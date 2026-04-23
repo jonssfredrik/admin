@@ -24,16 +24,16 @@ import { Table, Th, Td } from "@/components/ui/Table";
 import { RowMenu } from "@/components/ui/RowMenu";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/toast/ToastProvider";
-import { domainAnalyses, verdictMeta, type Verdict } from "@/modules/snaptld/data/core";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
 import { VerdictBadge } from "@/modules/snaptld/components/VerdictBadge";
 import { ExpiryBadge } from "@/modules/snaptld/components/ExpiryBadge";
 import { WatchButton } from "@/modules/snaptld/components/WatchButton";
 import { Checkbox } from "@/modules/snaptld/components/Checkbox";
-import { useWatchlist } from "@/modules/snaptld/lib/watchlist";
-import { useHidden, useReviewed } from "@/modules/snaptld/lib/reviewed";
-import { useDomainNotes } from "@/modules/snaptld/lib/notes";
+import { SnapTldUserStateProvider, useSnapTldUserState } from "@/modules/snaptld/client/SnapTldUserStateProvider";
+import { formatMoneyRange } from "@/modules/snaptld/lib/format";
 import { getQueueRows, getUniqueTlds, type QueueSortDir, type QueueSortKey } from "@/modules/snaptld/selectors/queue";
+import { verdictMeta } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis, SnapTldUserState, Verdict } from "@/modules/snaptld/types";
 
 const verdictFilters: { id: "all" | Verdict; label: string }[] = [
   { id: "all", label: "Alla" },
@@ -45,12 +45,23 @@ const verdictFilters: { id: "all" | Verdict; label: string }[] = [
 
 const PAGE_SIZE = 20;
 
-export function QueuePage() {
+export function QueuePage({
+  domains,
+  initialUserState,
+}: {
+  domains: DomainAnalysis[];
+  initialUserState: SnapTldUserState;
+}) {
+  return (
+    <SnapTldUserStateProvider initialState={initialUserState}>
+      <QueuePageContent domains={domains} />
+    </SnapTldUserStateProvider>
+  );
+}
+
+function QueuePageContent({ domains }: { domains: DomainAnalysis[] }) {
   const toast = useToast();
-  const watchlist = useWatchlist();
-  const hidden = useHidden();
-  const reviewed = useReviewed();
-  const notes = useDomainNotes();
+  const userState = useSnapTldUserState();
 
   const [query, setQuery] = useState("");
   const [verdict, setVerdict] = useState<(typeof verdictFilters)[number]["id"]>("all");
@@ -63,23 +74,23 @@ export function QueuePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
 
-  const uniqueTlds = useMemo(() => getUniqueTlds(domainAnalyses), []);
+  const uniqueTlds = useMemo(() => getUniqueTlds(domains), [domains]);
 
   const filtered = useMemo(() => {
     const tagMap = new Map(
-      Object.entries(notes.map).map(([slug, note]) => [slug, note.tags]),
+      Object.entries(userState.state.notes).map(([slug, note]) => [slug, note.tags]),
     );
 
     return getQueueRows(
-      domainAnalyses,
+      domains,
       { query, verdict, tld, tagFilter, onlyWatched, showHidden },
       sortKey,
       sortDir,
-      watchlist.values,
-      hidden.values,
+      userState.state.watchlist,
+      userState.state.hidden,
       tagMap,
     );
-  }, [query, verdict, tld, tagFilter, onlyWatched, showHidden, sortKey, sortDir, watchlist.values, hidden.values, notes.map]);
+  }, [domains, query, verdict, tld, tagFilter, onlyWatched, showHidden, sortKey, sortDir, userState.state.watchlist, userState.state.hidden, userState.state.notes]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount - 1);
@@ -116,36 +127,43 @@ export function QueuePage() {
 
   const clearSelection = () => setSelected(new Set());
 
-  const bulkWatch = () => {
+  const bulkWatch = async () => {
     const slugs = Array.from(selected);
-    slugs.forEach((slug) => {
-      if (!watchlist.has(slug)) watchlist.add(slug);
-    });
+    await userState.addWatchMany(slugs);
     toast.success(`Bevakar ${slugs.length} domäner`);
     clearSelection();
   };
 
-  const bulkHide = () => {
+  const bulkHide = async () => {
     const slugs = Array.from(selected);
-    hidden.addMany(slugs);
+    await userState.addHiddenMany(slugs);
     toast.success(`${slugs.length} domäner dolda`);
     clearSelection();
   };
 
-  const bulkReviewed = () => {
+  const bulkReviewed = async () => {
     const slugs = Array.from(selected);
-    reviewed.addMany(slugs);
+    await userState.addReviewedMany(slugs);
     toast.success(`${slugs.length} markerade som granskade`);
     clearSelection();
   };
 
   const bulkExport = () => {
     const slugs = Array.from(selected);
-    const rows = domainAnalyses.filter((domain) => slugs.includes(domain.slug));
+    const rows = domains.filter((domain) => slugs.includes(domain.slug));
     const csv = [
-      "domain,score,verdict,expires,source,value",
+      "domain,score,verdict,expires,source,value_min,value_max,currency",
       ...rows.map((row) =>
-        [row.domain, row.totalScore, row.verdict, row.expiresAt, row.source, row.estimatedValue].join(","),
+        [
+          row.domain,
+          row.totalScore,
+          row.verdict,
+          row.expiresAt,
+          row.source,
+          row.estimatedValue.min,
+          row.estimatedValue.max,
+          row.estimatedValue.currency,
+        ].join(","),
       ),
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -168,7 +186,7 @@ export function QueuePage() {
     setShowHidden(false);
   };
 
-  const allTags = notes.allTags();
+  const allTags = Array.from(new Set(Object.values(userState.state.notes).flatMap((note) => note.tags))).sort();
   const activeFilters =
     (query ? 1 : 0) + (verdict !== "all" ? 1 : 0) + (tld !== "all" ? 1 : 0) + (tagFilter ? 1 : 0) + (onlyWatched ? 1 : 0);
 
@@ -177,17 +195,17 @@ export function QueuePage() {
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           title="Analyskö"
-          subtitle="Alla analyserade domäner. Filtrera, sortera, markera — och agera i grupp."
+          subtitle="Alla analyserade domäner. Filtrera, sortera, markera och agera i grupp."
         />
         <div className="flex items-center gap-3 text-xs text-muted">
-          {reviewed.hydrated && reviewed.count > 0 && <span>{reviewed.count} granskade</span>}
-          {hidden.hydrated && hidden.count > 0 && (
+          {userState.state.reviewed.length > 0 && <span>{userState.state.reviewed.length} granskade</span>}
+          {userState.state.hidden.length > 0 && (
             <button
               onClick={() => setShowHidden((value) => !value)}
               className="inline-flex items-center gap-1 hover:text-fg"
             >
               {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
-              {hidden.count} dolda
+              {userState.state.hidden.length} dolda
             </button>
           )}
         </div>
@@ -201,7 +219,7 @@ export function QueuePage() {
               className="pl-9"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Sök domän eller källa…"
+              placeholder="Sök domän eller källa..."
             />
           </div>
 
@@ -253,9 +271,9 @@ export function QueuePage() {
           >
             <Bookmark size={12} />
             Bevakade
-            {watchlist.hydrated && watchlist.count > 0 && (
+            {userState.state.watchlist.length > 0 && (
               <span className={clsx("rounded px-1 tabular-nums", onlyWatched ? "bg-bg/20" : "bg-fg/10")}>
-                {watchlist.count}
+                {userState.state.watchlist.length}
               </span>
             )}
           </button>
@@ -350,7 +368,7 @@ export function QueuePage() {
           )}
           {pageRows.map((domain) => {
             const isSelected = selected.has(domain.slug);
-            const isReviewed = reviewed.has(domain.slug);
+            const isReviewed = userState.hasReviewed(domain.slug);
             return (
               <tr
                 key={domain.slug}
@@ -393,7 +411,7 @@ export function QueuePage() {
                   <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
                 </Td>
                 <Td className="text-xs capitalize text-muted">{domain.source.replace("-", " ")}</Td>
-                <Td className="text-right text-xs font-medium">{domain.estimatedValue}</Td>
+                <Td className="text-right text-xs font-medium">{formatMoneyRange(domain.estimatedValue)}</Td>
                 <Td>
                   <RowMenu
                     items={[
@@ -404,12 +422,12 @@ export function QueuePage() {
                       {
                         label: isReviewed ? "Ångra granskad" : "Markera granskad",
                         icon: Eye,
-                        onClick: () => reviewed.toggle(domain.slug),
+                        onClick: () => userState.toggleReviewed(domain.slug),
                       },
                       {
-                        label: hidden.has(domain.slug) ? "Visa igen" : "Dölj domän",
-                        icon: hidden.has(domain.slug) ? Eye : EyeOff,
-                        onClick: () => hidden.toggle(domain.slug),
+                        label: userState.hasHidden(domain.slug) ? "Visa igen" : "Dölj domän",
+                        icon: userState.hasHidden(domain.slug) ? Eye : EyeOff,
+                        onClick: () => userState.toggleHidden(domain.slug),
                       },
                       { divider: true },
                       { label: "Ta bort", icon: Trash2, danger: true, onClick: () => toast.error("Borttagen", domain.domain) },
@@ -460,12 +478,12 @@ function BulkButton({
   children,
 }: {
   icon: typeof Bookmark;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   children: React.ReactNode;
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={() => void onClick()}
       className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-bg/90 transition-colors hover:bg-bg/10 hover:text-bg"
     >
       <Icon size={13} />

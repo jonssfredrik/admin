@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { StatCard } from "@/components/ui/StatCard";
 import { useToast } from "@/components/toast/ToastProvider";
+import { saveSettingsAction } from "@/modules/snaptld/actions";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
+import type { SnapTldSettings } from "@/modules/snaptld/types";
 
 interface ApiKey {
   id: string;
@@ -21,7 +24,7 @@ const apiKeys: ApiKey[] = [
   {
     id: "openai",
     label: "OpenAI / GPT",
-    provider: "sk-…",
+    provider: "sk-...",
     placeholder: "sk-proj-***********************",
     hint: "Används för AI-utlåtanden och brand-analys",
   },
@@ -41,24 +44,25 @@ const apiKeys: ApiKey[] = [
   },
 ];
 
-export function SettingsPage() {
+export function SettingsPage({ initialSettings }: { initialSettings: SnapTldSettings }) {
   const toast = useToast();
-  const [keys, setKeys] = useState<Record<string, string>>({});
+  const action = useAsyncAction();
+  const [settings, setSettings] = useState(initialSettings);
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
-  const [thresholds, setThresholds] = useState({
-    scoreAlert: 85,
-    expiryAlert: 3,
-    costCap: 250,
-  });
-  const [notifyEmail, setNotifyEmail] = useState("");
-  const [pushEnabled, setPushEnabled] = useState(true);
 
   const usageThisMonth = 87.4;
   const analysesThisMonth = 142;
   const tokensThisMonth = 1_240_000;
 
-  const save = (section: string) => () =>
-    toast.success("Sparat", `${section} uppdaterade`);
+  const save = async (section: string) => {
+    try {
+      const updated = await action.run(() => saveSettingsAction(settings));
+      setSettings(updated);
+      toast.success("Sparat", `${section} uppdaterade`);
+    } catch (error) {
+      toast.error("Kunde inte spara", error instanceof Error ? error.message : section);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -68,23 +72,9 @@ export function SettingsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard
-          label="Kostnad denna månad"
-          value={`$${usageThisMonth.toFixed(2)}`}
-          hint={`Tak: $${thresholds.costCap}`}
-        />
-        <StatCard
-          label="Analyser denna månad"
-          value={String(analysesThisMonth)}
-          delta={23}
-          hint="Mot 200/mån"
-        />
-        <StatCard
-          label="AI-tokens"
-          value={`${(tokensThisMonth / 1000).toFixed(0)}k`}
-          delta={12}
-          hint="Input + output"
-        />
+        <StatCard label="Kostnad denna månad" value={`$${usageThisMonth.toFixed(2)}`} hint={`Tak: $${settings.thresholds.costCap}`} />
+        <StatCard label="Analyser denna månad" value={String(analysesThisMonth)} delta={23} hint="Mot 200/mån" />
+        <StatCard label="AI-tokens" value={`${(tokensThisMonth / 1000).toFixed(0)}k`} delta={12} hint="Input + output" />
       </div>
 
       <Card>
@@ -96,40 +86,45 @@ export function SettingsPage() {
           Nycklar lagras krypterat och används bara vid analys-körningar.
         </p>
         <div className="mt-4 space-y-4">
-          {apiKeys.map((k) => {
-            const shown = reveal[k.id];
+          {apiKeys.map((key) => {
+            const shown = reveal[key.id];
             return (
-              <div key={k.id} className="grid gap-1 sm:grid-cols-[180px_1fr] sm:gap-3">
+              <div key={key.id} className="grid gap-1 sm:grid-cols-[180px_1fr] sm:gap-3">
                 <div>
-                  <div className="text-sm font-medium">{k.label}</div>
-                  <div className="text-[11px] text-muted">{k.provider}</div>
+                  <div className="text-sm font-medium">{key.label}</div>
+                  <div className="text-[11px] text-muted">{key.provider}</div>
                 </div>
                 <div>
                   <div className="relative">
                     <Input
                       type={shown ? "text" : "password"}
-                      value={keys[k.id] ?? ""}
-                      onChange={(e) => setKeys({ ...keys, [k.id]: e.target.value })}
-                      placeholder={k.placeholder}
+                      value={settings.apiKeys[key.id] ?? ""}
+                      onChange={(event) =>
+                        setSettings((current) => ({
+                          ...current,
+                          apiKeys: { ...current.apiKeys, [key.id]: event.target.value },
+                        }))
+                      }
+                      placeholder={key.placeholder}
                       className="pr-9 font-mono text-xs"
                     />
                     <button
                       type="button"
-                      onClick={() => setReveal({ ...reveal, [k.id]: !shown })}
+                      onClick={() => setReveal({ ...reveal, [key.id]: !shown })}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:text-fg"
                       aria-label={shown ? "Dölj" : "Visa"}
                     >
                       {shown ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
                   </div>
-                  <div className="mt-1 text-[11px] text-muted">{k.hint}</div>
+                  <div className="mt-1 text-[11px] text-muted">{key.hint}</div>
                 </div>
               </div>
             );
           })}
         </div>
         <div className="mt-4 flex justify-end">
-          <Button className="gap-1.5" onClick={save("Nycklar")}>
+          <Button className="gap-1.5" onClick={() => void save("Nycklar")} disabled={action.isPending}>
             <Save size={12} /> Spara
           </Button>
         </div>
@@ -150,31 +145,18 @@ export function SettingsPage() {
               <Input
                 id="cost-cap"
                 type="number"
-                value={thresholds.costCap}
-                onChange={(e) =>
-                  setThresholds({ ...thresholds, costCap: Number(e.target.value) || 0 })
+                value={settings.thresholds.costCap}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    thresholds: { ...current.thresholds, costCap: Number(event.target.value) || 0 },
+                  }))
                 }
               />
             </div>
-            <div className="rounded-lg border bg-bg/40 p-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Förbrukat</span>
-                <span className="font-mono tabular-nums">
-                  ${usageThisMonth.toFixed(2)} / ${thresholds.costCap}
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-fg/5">
-                <div
-                  className="h-full bg-fg/70"
-                  style={{
-                    width: `${Math.min(100, (usageThisMonth / thresholds.costCap) * 100)}%`,
-                  }}
-                />
-              </div>
-            </div>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button className="gap-1.5" onClick={save("Kostnadstak")}>
+            <Button className="gap-1.5" onClick={() => void save("Kostnadstak")} disabled={action.isPending}>
               <Save size={12} /> Spara
             </Button>
           </div>
@@ -197,9 +179,12 @@ export function SettingsPage() {
                   type="number"
                   min={0}
                   max={100}
-                  value={thresholds.scoreAlert}
-                  onChange={(e) =>
-                    setThresholds({ ...thresholds, scoreAlert: Number(e.target.value) || 0 })
+                  value={settings.thresholds.scoreAlert}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      thresholds: { ...current.thresholds, scoreAlert: Number(event.target.value) || 0 },
+                    }))
                   }
                 />
               </div>
@@ -209,9 +194,12 @@ export function SettingsPage() {
                   id="expiry-alert"
                   type="number"
                   min={0}
-                  value={thresholds.expiryAlert}
-                  onChange={(e) =>
-                    setThresholds({ ...thresholds, expiryAlert: Number(e.target.value) || 0 })
+                  value={settings.thresholds.expiryAlert}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      thresholds: { ...current.thresholds, expiryAlert: Number(event.target.value) || 0 },
+                    }))
                   }
                 />
               </div>
@@ -221,16 +209,16 @@ export function SettingsPage() {
               <Input
                 id="notify-email"
                 type="email"
-                value={notifyEmail}
-                onChange={(e) => setNotifyEmail(e.target.value)}
+                value={settings.notifyEmail}
+                onChange={(event) => setSettings((current) => ({ ...current, notifyEmail: event.target.value }))}
                 placeholder="du@exempel.se"
               />
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={pushEnabled}
-                onChange={(e) => setPushEnabled(e.target.checked)}
+                checked={settings.pushEnabled}
+                onChange={(event) => setSettings((current) => ({ ...current, pushEnabled: event.target.checked }))}
                 className="h-3.5 w-3.5 accent-fg"
               />
               <Sparkles size={12} className="text-muted" />
@@ -238,7 +226,7 @@ export function SettingsPage() {
             </label>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button className="gap-1.5" onClick={save("Aviseringar")}>
+            <Button className="gap-1.5" onClick={() => void save("Aviseringar")} disabled={action.isPending}>
               <Save size={12} /> Spara
             </Button>
           </div>

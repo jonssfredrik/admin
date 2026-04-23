@@ -3,10 +3,10 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowRight, Sparkles, X } from "lucide-react";
-import { domainAnalyses } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { useLastVisit } from "@/modules/snaptld/lib/lastVisit";
 
-export function NewSinceBanner() {
+export function NewSinceBanner({ domains }: { domains: DomainAnalysis[] }) {
   const lastVisit = useLastVisit();
 
   useEffect(() => {
@@ -16,8 +16,8 @@ export function NewSinceBanner() {
   const newSince = useMemo(() => {
     if (!lastVisit.hydrated || !lastVisit.value) return [];
     const cutoff = new Date(lastVisit.value).getTime();
-    return domainAnalyses.filter((d) => new Date(d.fetchedAt).getTime() > cutoff);
-  }, [lastVisit.hydrated, lastVisit.value]);
+    return domains.filter((domain) => new Date(domain.fetchedAt).getTime() > cutoff);
+  }, [domains, lastVisit.hydrated, lastVisit.value]);
 
   if (!lastVisit.hydrated || !lastVisit.value) return null;
   if (newSince.length === 0) return null;
@@ -37,13 +37,13 @@ export function NewSinceBanner() {
         </div>
         <div className="mt-0.5 truncate text-xs text-muted">
           Topp:{" "}
-          {topNew.map((d, i) => (
-            <span key={d.slug}>
-              <Link href={`/snaptld/${d.slug}`} className="font-mono text-fg hover:underline">
-                {d.domain}
+          {topNew.map((domain, index) => (
+            <span key={domain.slug}>
+              <Link href={`/snaptld/${domain.slug}`} className="font-mono text-fg hover:underline">
+                {domain.domain}
               </Link>
-              <span className="text-muted"> ({d.totalScore})</span>
-              {i < topNew.length - 1 && <span className="text-muted"> · </span>}
+              <span className="text-muted"> ({domain.totalScore})</span>
+              {index < topNew.length - 1 && <span className="text-muted"> · </span>}
             </span>
           ))}
         </div>

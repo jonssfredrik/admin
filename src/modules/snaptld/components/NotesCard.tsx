@@ -6,41 +6,57 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
-import { useDomainNotes } from "@/modules/snaptld/lib/notes";
+import { useSnapTldUserState } from "@/modules/snaptld/client/SnapTldUserStateProvider";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
 
 export function NotesCard({ slug, domain }: { slug: string; domain: string }) {
   const toast = useToast();
-  const notes = useDomainNotes();
-  const existing = notes.get(slug);
+  const action = useAsyncAction();
+  const { state, saveNote } = useSnapTldUserState();
+  const existing = state.notes[slug];
 
   const [text, setText] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
   useEffect(() => {
-    if (!notes.hydrated) return;
     setText(existing?.text ?? "");
     setTags(existing?.tags ?? []);
-  }, [notes.hydrated, existing?.text, existing?.tags]);
+  }, [existing?.text, existing?.tags]);
 
   const dirty =
     text !== (existing?.text ?? "") ||
     tags.length !== (existing?.tags.length ?? 0) ||
-    tags.some((t, i) => t !== existing?.tags[i]);
+    tags.some((tag, index) => tag !== existing?.tags[index]);
 
   const addTag = () => {
-    const v = tagInput.trim().toLowerCase();
-    if (!v || tags.includes(v)) {
+    const value = tagInput.trim().toLowerCase();
+    if (!value || tags.includes(value)) {
       setTagInput("");
       return;
     }
-    setTags([...tags, v]);
+    setTags([...tags, value]);
     setTagInput("");
   };
 
-  const save = () => {
-    notes.set(slug, text, tags);
-    toast.success("Anteckning sparad", domain);
+  const save = async () => {
+    try {
+      await action.run(() =>
+        saveNote(
+          slug,
+          !text.trim() && tags.length === 0
+            ? null
+            : {
+                text,
+                tags,
+                updatedAt: new Date().toISOString(),
+              },
+        ),
+      );
+      toast.success("Anteckning sparad", domain);
+    } catch (error) {
+      toast.error("Kunde inte spara anteckning", error instanceof Error ? error.message : domain);
+    }
   };
 
   return (
@@ -57,25 +73,25 @@ export function NotesCard({ slug, domain }: { slug: string; domain: string }) {
 
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(event) => setText(event.target.value)}
         rows={3}
-        placeholder="Egna observationer, buds-taktik, kontakter…"
+        placeholder="Egna observationer, buds-taktik, kontakter..."
         className="mt-3 w-full resize-none rounded-lg border bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
       />
 
       <div className="mt-3">
         <div className="flex flex-wrap items-center gap-1.5">
-          {tags.map((t) => (
+          {tags.map((tag) => (
             <span
-              key={t}
+              key={tag}
               className="inline-flex items-center gap-1 rounded-md border bg-bg/40 px-2 py-0.5 text-xs"
             >
               <Tag size={10} className="text-muted" />
-              {t}
+              {tag}
               <button
-                onClick={() => setTags(tags.filter((x) => x !== t))}
+                onClick={() => setTags(tags.filter((value) => value !== tag))}
                 className="text-muted hover:text-fg"
-                aria-label={`Ta bort ${t}`}
+                aria-label={`Ta bort ${tag}`}
               >
                 <X size={10} />
               </button>
@@ -83,22 +99,22 @@ export function NotesCard({ slug, domain }: { slug: string; domain: string }) {
           ))}
           <Input
             value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === ",") {
-                e.preventDefault();
+            onChange={(event) => setTagInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === ",") {
+                event.preventDefault();
                 addTag();
               }
             }}
             onBlur={addTag}
-            placeholder="Lägg till tagg…"
+            placeholder="Lägg till tagg..."
             className="h-7 w-40 text-xs"
           />
         </div>
       </div>
 
       <div className="mt-3 flex justify-end">
-        <Button className="h-8 gap-1.5 px-3 text-xs" disabled={!dirty} onClick={save}>
+        <Button className="h-8 gap-1.5 px-3 text-xs" disabled={!dirty || action.isPending} onClick={save}>
           <Save size={12} />
           Spara
         </Button>

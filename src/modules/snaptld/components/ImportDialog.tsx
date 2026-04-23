@@ -23,11 +23,12 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
-import { importedDomains } from "@/modules/snaptld/data/imports";
-import { useMockActionState, waitForMockAction } from "@/modules/snaptld/lib/useMockActionState";
+import { importDomainsAction } from "@/modules/snaptld/actions";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
+import type { ImportDomainsInput } from "@/modules/snaptld/types";
 
-type Mode = "url" | "text" | "csv" | "json";
-type AnalysisStep = "overview" | "brand" | "risk" | "seo" | "history";
+type Mode = ImportDomainsInput["mode"];
+type AnalysisStep = ImportDomainsInput["selectedSteps"][number];
 
 const modes: { id: Mode; label: string; icon: typeof LinkIcon; hint: string }[] = [
   { id: "url", label: "URL", icon: LinkIcon, hint: "JSON/CSV-feed" },
@@ -74,7 +75,6 @@ interface ParseResult {
 
 function parseInput(mode: Mode, text: string, fileContent: string | null): ParseResult {
   const raw: string[] = [];
-  const existing = new Set(importedDomains.map((domain) => domain.domain.toLowerCase()));
   const seen = new Set<string>();
 
   const src = mode === "text" ? text : fileContent ?? "";
@@ -122,7 +122,7 @@ function parseInput(mode: Mode, text: string, fileContent: string | null): Parse
       invalid.push(entry);
       return;
     }
-    if (existing.has(clean) || seen.has(clean)) {
+    if (seen.has(clean)) {
       duplicates.push(clean);
       return;
     }
@@ -146,7 +146,7 @@ function downloadTemplate(mode: "csv" | "json") {
 
 export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const toast = useToast();
-  const importAction = useMockActionState();
+  const importAction = useAsyncAction();
   const [mode, setMode] = useState<Mode>("url");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
@@ -174,6 +174,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const resetForm = () => {
+    setMode("url");
     setUrl("");
     setText("");
     setFileName(null);
@@ -183,6 +184,11 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
     importAction.reset();
   };
 
+  const closeDialog = () => {
+    resetForm();
+    onClose();
+  };
+
   const toggleStep = (step: AnalysisStep) => {
     setSelectedSteps((current) =>
       current.includes(step) ? current.filter((item) => item !== step) : [...current, step],
@@ -190,37 +196,37 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const handleImport = async () => {
-    const countLabel = mode === "url" ? "Feed importerad och köad" : `${result.valid.length} domäner importerade`;
-    const duplicateLabel =
-      mode === "url" || result.duplicates.length === 0 ? "" : ` · ${result.duplicates.length} dubletter hoppades över`;
-
     try {
-      await importAction.run(async () => {
-        await waitForMockAction(500);
-      });
+      const response = await importAction.run(() =>
+        importDomainsAction({
+          mode,
+          url: mode === "url" ? url.trim() : undefined,
+          validDomains: result.valid,
+          duplicates: result.duplicates,
+          priority,
+          selectedSteps,
+        }),
+      );
 
       if (shouldAnalyze) {
-        const stepsLabel = `${selectedSteps.length} steg valda`;
         toast.success(
           priority ? "Prioriterad analys startad" : "Analys startad",
-          `${countLabel}${duplicateLabel} · ${stepsLabel}`,
+          `${response.imported} importerade · ${selectedSteps.length} steg valda`,
         );
       } else {
-        toast.success("Import klar", `${countLabel}${duplicateLabel} · ingen analys vald`);
+        toast.success("Import klar", `${response.imported} importerade · ${response.duplicates} dubletter`);
       }
 
-      resetForm();
-      onClose();
-    } catch {}
+      closeDialog();
+    } catch (error) {
+      toast.error("Import misslyckades", error instanceof Error ? error.message : "Kunde inte importera");
+    }
   };
 
   return (
     <Dialog
       open={open}
-      onClose={() => {
-        resetForm();
-        onClose();
-      }}
+      onClose={closeDialog}
       title="Importera domäner"
       description="Välj källa och vilka analyssteg som ska köras. Lämnar du allt tomt importeras domänerna utan analys."
       size="lg"
@@ -241,7 +247,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
             />
             Kör före andra kö-jobb
           </label>
-          <Button variant="secondary" onClick={onClose} disabled={importAction.isPending}>
+          <Button variant="secondary" onClick={closeDialog} disabled={importAction.isPending}>
             Avbryt
           </Button>
           <Button onClick={handleImport} disabled={!canImport || importAction.isPending} className="gap-1.5">
@@ -394,12 +400,6 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
         {mode !== "url" && mode !== "text" && fileContent && result.valid.length === 0 && result.invalid.length === 0 && (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
             Filen verkar tom eller i fel format. Ladda ner mallen för att se förväntat schema.
-          </div>
-        )}
-
-        {importAction.isError && importAction.errorMessage && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-700 dark:text-red-400">
-            {importAction.errorMessage}
           </div>
         )}
       </div>

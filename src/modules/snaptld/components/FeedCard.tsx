@@ -9,14 +9,17 @@ import { Badge } from "@/components/ui/Table";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input, Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
+import { formatDateTime, formatFeedSchedule } from "@/modules/snaptld/lib/format";
+import { updateFeedScheduleAction, toggleFeedStatusAction } from "@/modules/snaptld/actions";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
 import type { FeedSource } from "@/modules/snaptld/types";
 
 const cadencePresets = [
-  { id: "hourly", label: "Varje timme", value: "Varje timme" },
-  { id: "6h", label: "Var 6:e timme", value: "Var 6:e timme" },
-  { id: "daily", label: "Dagligen 08:00", value: "Dagligen 08:00" },
-  { id: "weekly", label: "Veckovis (måndag)", value: "Veckovis mån 08:00" },
-];
+  { id: "hourly", label: "Varje timme", value: { type: "hourly", label: "Varje timme", intervalHours: 1 } },
+  { id: "6h", label: "Var 6:e timme", value: { type: "interval", label: "Var 6:e timme", intervalHours: 6 } },
+  { id: "daily", label: "Dagligen 08:00", value: { type: "daily", label: "Dagligen 08:00", time: "08:00" } },
+  { id: "weekly", label: "Veckovis (måndag)", value: { type: "weekly", label: "Veckovis (måndag)", weekday: "måndag", time: "08:00" } },
+] as const;
 
 const statusMap = {
   active: { icon: CheckCircle2, color: "text-emerald-600 dark:text-emerald-400", label: "Aktiv", tone: "success" as const },
@@ -24,19 +27,42 @@ const statusMap = {
   error: { icon: XCircle, color: "text-red-600 dark:text-red-400", label: "Fel", tone: "danger" as const },
 };
 
-export function FeedCard({ feed }: { feed: FeedSource }) {
+export function FeedCard({ feed: initialFeed }: { feed: FeedSource }) {
   const toast = useToast();
-  const s = statusMap[feed.status];
-  const Icon = s.icon;
+  const scheduleAction = useAsyncAction();
+  const toggleAction = useAsyncAction();
+  const [feed, setFeed] = useState(initialFeed);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [cadence, setCadence] = useState(feed.cadence);
+  const [schedule, setSchedule] = useState(feed.schedule);
   const [custom, setCustom] = useState("");
+  const status = statusMap[feed.status];
+  const Icon = status.icon;
 
-  const saveSchedule = () => {
-    const next = custom.trim() || cadence;
-    toast.success("Schema uppdaterat", `${feed.name} · ${next}`);
-    setScheduleOpen(false);
-    setCustom("");
+  const saveSchedule = async () => {
+    const nextSchedule = custom.trim()
+      ? { type: "custom" as const, label: custom.trim(), cron: custom.trim() }
+      : schedule;
+
+    try {
+      const updated = await scheduleAction.run(() => updateFeedScheduleAction(feed.id, nextSchedule));
+      setFeed(updated);
+      setSchedule(updated.schedule);
+      setScheduleOpen(false);
+      setCustom("");
+      toast.success("Schema uppdaterat", `${feed.name} · ${formatFeedSchedule(updated.schedule)}`);
+    } catch (error) {
+      toast.error("Kunde inte uppdatera schema", error instanceof Error ? error.message : feed.name);
+    }
+  };
+
+  const toggleStatus = async () => {
+    try {
+      const updated = await toggleAction.run(() => toggleFeedStatusAction(feed.id));
+      setFeed(updated);
+      toast.success(updated.status === "paused" ? "Feed pausad" : "Feed återupptagen", feed.name);
+    } catch (error) {
+      toast.error("Kunde inte uppdatera feed", error instanceof Error ? error.message : feed.name);
+    }
   };
 
   return (
@@ -44,12 +70,12 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Icon size={14} className={clsx("shrink-0", s.color)} />
+            <Icon size={14} className={clsx("shrink-0", status.color)} />
             <h3 className="truncate text-sm font-semibold">{feed.name}</h3>
           </div>
           <p className="mt-1 break-all text-[11px] font-mono text-muted">{feed.url}</p>
         </div>
-        <Badge tone={s.tone}>{s.label}</Badge>
+        <Badge tone={status.tone}>{status.label}</Badge>
       </div>
 
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
@@ -58,9 +84,9 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
         <div className="text-muted">Typ</div>
         <div className="font-medium uppercase">{feed.type}</div>
         <div className="text-muted">Kadens</div>
-        <div className="font-medium">{cadence}</div>
+        <div className="font-medium">{formatFeedSchedule(feed.schedule)}</div>
         <div className="text-muted">Senaste hämtning</div>
-        <div className="font-mono">{feed.lastFetched}</div>
+        <div className="font-mono">{formatDateTime(feed.lastFetchedAt)}</div>
         <div className="text-muted">Domäner (senaste)</div>
         <div className="font-medium tabular-nums">{feed.domainsLastRun.toLocaleString("sv-SE")}</div>
       </dl>
@@ -69,9 +95,7 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
         <Button
           variant="secondary"
           className="flex-1 gap-1.5"
-          onClick={() =>
-            toast.info("Hämtar feed", `${feed.name} kö-lagd för nästa analys`)
-          }
+          onClick={() => toast.info("Hämtar feed", `${feed.name} kö-lagd för nästa analys`)}
         >
           <RefreshCcw size={14} />
           Hämta nu
@@ -85,15 +109,7 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
           <CalendarClock size={14} />
           Schema
         </Button>
-        <Button
-          variant="ghost"
-          onClick={() =>
-            toast.success(
-              feed.status === "paused" ? "Feed återupptagen" : "Feed pausad",
-              feed.name,
-            )
-          }
-        >
+        <Button variant="ghost" onClick={toggleStatus} disabled={toggleAction.isPending}>
           {feed.status === "paused" ? "Återuppta" : "Pausa"}
         </Button>
       </div>
@@ -109,7 +125,7 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
             <Button variant="secondary" onClick={() => setScheduleOpen(false)}>
               Avbryt
             </Button>
-            <Button onClick={saveSchedule}>Spara</Button>
+            <Button onClick={saveSchedule} disabled={scheduleAction.isPending}>Spara</Button>
           </>
         }
       >
@@ -117,13 +133,13 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
           <div>
             <Label>Kadens</Label>
             <div className="mt-1.5 grid grid-cols-2 gap-2">
-              {cadencePresets.map((p) => {
-                const active = cadence === p.value && !custom.trim();
+              {cadencePresets.map((preset) => {
+                const active = schedule.label === preset.value.label && !custom.trim();
                 return (
                   <button
-                    key={p.id}
+                    key={preset.id}
                     onClick={() => {
-                      setCadence(p.value);
+                      setSchedule(preset.value);
                       setCustom("");
                     }}
                     className={clsx(
@@ -131,7 +147,7 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
                       active ? "border-fg bg-fg/5" : "hover:bg-bg/60",
                     )}
                   >
-                    {p.label}
+                    {preset.label}
                   </button>
                 );
               })}
@@ -143,7 +159,7 @@ export function FeedCard({ feed }: { feed: FeedSource }) {
               id="custom-cron"
               placeholder="0 */4 * * *"
               value={custom}
-              onChange={(e) => setCustom(e.target.value)}
+              onChange={(event) => setCustom(event.target.value)}
               className="font-mono"
             />
             <div className="mt-1 text-[11px] text-muted">

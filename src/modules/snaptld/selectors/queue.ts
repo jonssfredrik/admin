@@ -13,11 +13,6 @@ export interface QueueFilters {
   showHidden: boolean;
 }
 
-function parseValue(range: string): number {
-  const match = range.match(/(\d[\d\s]*)/);
-  return match ? parseInt(match[1].replace(/\s/g, ""), 10) : 0;
-}
-
 export function getUniqueTlds(domains: DomainAnalysis[]) {
   return Array.from(new Set(domains.map((domain) => domain.tld))).sort();
 }
@@ -59,7 +54,7 @@ export function getQueueRows(
         case "expires":
           return (expiryInfo(a.expiresAt).days - expiryInfo(b.expiresAt).days) * dir;
         case "value":
-          return (parseValue(a.estimatedValue) - parseValue(b.estimatedValue)) * dir;
+          return (a.estimatedValue.min - b.estimatedValue.min) * dir;
         case "score":
         default:
           return (a.totalScore - b.totalScore) * dir;

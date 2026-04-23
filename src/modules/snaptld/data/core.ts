@@ -1,5 +1,5 @@
-import type { AnalysisCategory, CategoryResult, DomainAnalysis, Signal, Tone, Verdict } from "@/modules/snaptld/types";
-export type { AnalysisCategory, CategoryResult, DomainAnalysis, Signal, Tone, Verdict } from "@/modules/snaptld/types";
+import type { AnalysisCategory, CategoryResult, RawDomainAnalysis, Signal, Tone, Verdict } from "@/modules/snaptld/types";
+export type { AnalysisCategory, CategoryResult, Signal, Tone, Verdict } from "@/modules/snaptld/types";
 
 export const categoryMeta: Record<AnalysisCategory, { label: string; description: string }> = {
   structure: {
@@ -64,7 +64,7 @@ const mk = (
   verdict?: string,
 ): CategoryResult => ({ score, weight, signals, verdict });
 
-export const domainAnalyses: DomainAnalysis[] = [
+export const domainAnalyses: RawDomainAnalysis[] = [
   {
     slug: "nordbyte",
     domain: "nordbyte.se",

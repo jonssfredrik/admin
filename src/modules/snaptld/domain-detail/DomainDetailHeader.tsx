@@ -9,14 +9,15 @@ import { BigScoreRing } from "@/modules/snaptld/components/ScoreBar";
 import { VerdictBadge } from "@/modules/snaptld/components/VerdictBadge";
 import { WatchButton } from "@/modules/snaptld/components/WatchButton";
 import { ExpiryBadge } from "@/modules/snaptld/components/ExpiryBadge";
-import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { useToast } from "@/components/toast/ToastProvider";
+import { formatMoneyRange, formatRelativeDaysSince } from "@/modules/snaptld/lib/format";
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
-export function DomainDetailHeader({ domain }: { domain: DomainAnalysis }) {
+export function DomainDetailHeader({ domain, onRerun }: { domain: DomainAnalysis; onRerun?: () => void }) {
   const toast = useToast();
   const age = daysSince(domain.fetchedAt);
   const stale = age >= 7;
@@ -57,12 +58,12 @@ export function DomainDetailHeader({ domain }: { domain: DomainAnalysis }) {
                     stale ? "text-amber-600 dark:text-amber-400" : "text-fg",
                   )}
                 >
-                  {domain.fetchedAt} ({age === 0 ? "idag" : `${age}d sedan`})
+                  {domain.fetchedAt} ({formatRelativeDaysSince(domain.fetchedAt)})
                 </dd>
               </div>
               <div>
                 <dt className="inline">Uppskattat värde: </dt>
-                <dd className="inline font-medium text-fg">{domain.estimatedValue}</dd>
+                <dd className="inline font-medium text-fg">{formatMoneyRange(domain.estimatedValue)}</dd>
               </div>
             </dl>
           </div>
@@ -72,7 +73,10 @@ export function DomainDetailHeader({ domain }: { domain: DomainAnalysis }) {
           <Button
             variant={stale ? "primary" : "secondary"}
             className="gap-1.5"
-            onClick={() => toast.info("Analys kölagd", domain.domain)}
+            onClick={() => {
+              onRerun?.();
+              toast.info("Analys kölagd", domain.domain);
+            }}
           >
             {stale ? <AlertTriangle size={14} /> : <RefreshCcw size={14} />}
             {stale ? "Kör om (inaktuell)" : "Kör om"}

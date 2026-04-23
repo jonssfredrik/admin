@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/Card";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
 import { SignalList } from "@/modules/snaptld/components/SignalList";
-import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { StepCardHeader } from "./StepCardHeader";
 
 function MozStat({ label, value, max = 100, hint }: { label: string; value: number; max?: number; hint?: string }) {

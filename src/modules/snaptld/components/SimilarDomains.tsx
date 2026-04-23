@@ -3,11 +3,12 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ScoreBar } from "./ScoreBar";
 import { VerdictBadge } from "./VerdictBadge";
-import { domainAnalyses, type DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { getSimilarDomains } from "@/modules/snaptld/selectors/similar-domains";
+import { formatMoneyRange } from "@/modules/snaptld/lib/format";
 
-export function SimilarDomains({ domain }: { domain: DomainAnalysis }) {
-  const ranked = getSimilarDomains(domain, domainAnalyses);
+export function SimilarDomains({ domain, domains }: { domain: DomainAnalysis; domains: DomainAnalysis[] }) {
+  const ranked = getSimilarDomains(domain, domains);
 
   if (ranked.length === 0) return null;
 
@@ -33,7 +34,7 @@ export function SimilarDomains({ domain }: { domain: DomainAnalysis }) {
                 <span className="truncate text-sm font-medium">{candidate.domain}</span>
                 <VerdictBadge verdict={candidate.verdict} />
               </div>
-              <div className="truncate text-[11px] text-muted">{candidate.estimatedValue}</div>
+              <div className="truncate text-[11px] text-muted">{formatMoneyRange(candidate.estimatedValue)}</div>
             </div>
             <div className="w-28 shrink-0">
               <ScoreBar score={candidate.totalScore} showValue />

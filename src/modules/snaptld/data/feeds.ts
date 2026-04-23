@@ -1,6 +1,6 @@
-import type { FeedSource, Report } from "@/modules/snaptld/types";
+import type { RawFeedSource, RawReport } from "@/modules/snaptld/types";
 
-export const feedSources: FeedSource[] = [
+export const feedSources: RawFeedSource[] = [
   {
     id: "iis-se",
     name: "Internetstiftelsen (.se)",
@@ -47,7 +47,7 @@ export const feedSources: FeedSource[] = [
   },
 ];
 
-export const reports: Report[] = [
+export const reports: RawReport[] = [
   {
     id: "r-2026-04-19",
     title: "Dagsrapport 19 april",

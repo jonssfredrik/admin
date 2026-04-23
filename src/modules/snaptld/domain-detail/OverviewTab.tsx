@@ -4,11 +4,10 @@ import { ScoreBreakdown } from "@/modules/snaptld/components/ScoreBreakdown";
 import { NotesCard } from "@/modules/snaptld/components/NotesCard";
 import { SimilarDomains } from "@/modules/snaptld/components/SimilarDomains";
 import { DonutChart } from "@/components/charts/DonutChart";
-import type { DomainAnalysis } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis, WeightsConfig } from "@/modules/snaptld/types";
 import { categoryMeta, type AnalysisCategory } from "@/modules/snaptld/data/core";
 import { StepCardHeader } from "./StepCardHeader";
 import { getCategoryWeightMap } from "@/modules/snaptld/selectors/weights";
-import type { WeightsConfig } from "@/modules/snaptld/types";
 
 const donutColor = (score: number): string => {
   if (score >= 80) return "#10b981";
@@ -18,11 +17,13 @@ const donutColor = (score: number): string => {
 
 export function OverviewTab({
   domain,
+  domains,
   onRun,
   isRunning,
   weightsConfig,
 }: {
   domain: DomainAnalysis;
+  domains: DomainAnalysis[];
   onRun: () => void;
   isRunning?: boolean;
   weightsConfig: WeightsConfig;
@@ -73,7 +74,7 @@ export function OverviewTab({
       </Card>
 
       <div className="lg:col-span-2">
-        <SimilarDomains domain={domain} />
+        <SimilarDomains domain={domain} domains={domains} />
       </div>
 
       <NotesCard slug={domain.slug} domain={domain.domain} />

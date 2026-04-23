@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
-import { notFound, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Briefcase,
   LayoutDashboard,
@@ -14,7 +14,6 @@ import {
   History as HistoryIcon,
 } from "lucide-react";
 import clsx from "clsx";
-import { domainAnalyses } from "@/modules/snaptld/data/core";
 import { DomainDetailHeader } from "./DomainDetailHeader";
 import { RegisterActions, AuctionNotice } from "@/modules/snaptld/components/RegisterActions";
 import { OverviewTab } from "./OverviewTab";
@@ -22,10 +21,11 @@ import { CategoryTab } from "./CategoryTab";
 import { SeoTab } from "./SeoTab";
 import { HistoryTab } from "./HistoryTab";
 import { useToast } from "@/components/toast/ToastProvider";
-import { defaultWeightsYaml } from "@/modules/snaptld/data/weights";
 import { getCategoryWeightMap, parseWeightsConfig } from "@/modules/snaptld/selectors/weights";
-import { useActiveWeights } from "@/modules/snaptld/lib/activeWeights";
-import { useMockActionState, waitForMockAction } from "@/modules/snaptld/lib/useMockActionState";
+import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
+import { rerunAnalysisAction } from "@/modules/snaptld/actions";
+import { SnapTldUserStateProvider } from "@/modules/snaptld/client/SnapTldUserStateProvider";
+import type { DomainAnalysis, SnapTldUserState } from "@/modules/snaptld/types";
 
 type TabId =
   | "overview"
@@ -66,22 +66,42 @@ function isTabId(value: string | null): value is TabId {
   return value !== null && tabs.some((tab) => tab.id === value);
 }
 
-export default function DomainDetailPage({ params }: { params: Promise<{ domain: string }> }) {
-  const { domain: slug } = use(params);
+export default function DomainDetailPage({
+  domain,
+  domains,
+  activeWeightsYaml,
+  initialUserState,
+}: {
+  domain: DomainAnalysis;
+  domains: DomainAnalysis[];
+  activeWeightsYaml: string;
+  initialUserState: SnapTldUserState;
+}) {
+  return (
+    <SnapTldUserStateProvider initialState={initialUserState}>
+      <DomainDetailPageContent domain={domain} domains={domains} activeWeightsYaml={activeWeightsYaml} />
+    </SnapTldUserStateProvider>
+  );
+}
+
+function DomainDetailPageContent({
+  domain,
+  domains,
+  activeWeightsYaml,
+}: {
+  domain: DomainAnalysis;
+  domains: DomainAnalysis[];
+  activeWeightsYaml: string;
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const toast = useToast();
-  const activeWeights = useActiveWeights();
-  const rerunAction = useMockActionState();
-  const domain = domainAnalyses.find((entry) => entry.slug === slug);
-  const appliedWeightsYaml = activeWeights.hydrated ? activeWeights.value : defaultWeightsYaml;
-  const activeWeightsConfig = parseWeightsConfig(appliedWeightsYaml);
+  const rerunAction = useAsyncAction();
+  const activeWeightsConfig = parseWeightsConfig(activeWeightsYaml);
   const categoryWeights = getCategoryWeightMap(activeWeightsConfig);
   const requestedTab = searchParams.get("tab");
   const [tab, setTab] = useState<TabId>(isTabId(requestedTab) ? requestedTab : "overview");
   const [runningStep, setRunningStep] = useState<TabId | null>(null);
-
-  if (!domain) notFound();
 
   useEffect(() => {
     setTab(isTabId(requestedTab) ? requestedTab : "overview");
@@ -94,9 +114,7 @@ export default function DomainDetailPage({ params }: { params: Promise<{ domain:
     toast.info("Analyssteg kölagt", `${stepLabels[step]} för ${domain.domain}`);
 
     try {
-      await rerunAction.run(async () => {
-        await waitForMockAction(1400);
-      });
+      await rerunAction.run(() => rerunAnalysisAction(domain.slug, step));
       toast.success("Analyssteg klart", `${stepLabels[step]} uppdaterad för ${domain.domain}`);
     } catch {
       toast.error("Analyssteg misslyckades", `${stepLabels[step]} kunde inte köras för ${domain.domain}`);
@@ -111,12 +129,12 @@ export default function DomainDetailPage({ params }: { params: Promise<{ domain:
     if (nextTab === "overview") nextParams.delete("tab");
     else nextParams.set("tab", nextTab);
     const query = nextParams.toString();
-    router.replace(query ? `/snaptld/${slug}?${query}` : `/snaptld/${slug}`);
+    router.replace(query ? `/snaptld/${domain.slug}?${query}` : `/snaptld/${domain.slug}`);
   };
 
   return (
     <div className="space-y-6">
-      <DomainDetailHeader domain={domain} />
+      <DomainDetailHeader domain={domain} onRerun={() => void runStep("overview")} />
 
       <AuctionNotice domain={domain} />
 
@@ -142,22 +160,23 @@ export default function DomainDetailPage({ params }: { params: Promise<{ domain:
       {tab === "overview" && (
         <OverviewTab
           domain={domain}
+          domains={domains}
           weightsConfig={activeWeightsConfig}
-          onRun={() => runStep("overview")}
+          onRun={() => void runStep("overview")}
           isRunning={runningStep === "overview"}
         />
       )}
       {tab === "seo" && (
         <SeoTab
           domain={domain}
-          onRun={() => runStep("seo")}
+          onRun={() => void runStep("seo")}
           isRunning={runningStep === "seo"}
         />
       )}
       {tab === "history" && (
         <HistoryTab
           domain={domain}
-          onRun={() => runStep("history")}
+          onRun={() => void runStep("history")}
           isRunning={runningStep === "history"}
         />
       )}
@@ -166,7 +185,7 @@ export default function DomainDetailPage({ params }: { params: Promise<{ domain:
           category={tab}
           result={domain.categories[tab]}
           weight={categoryWeights[tab]}
-          onRun={() => runStep(tab)}
+          onRun={() => void runStep(tab)}
           isRunning={runningStep === tab}
         />
       )}

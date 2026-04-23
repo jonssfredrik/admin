@@ -8,8 +8,9 @@ import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { RowMenu } from "@/components/ui/RowMenu";
 import { useToast } from "@/components/toast/ToastProvider";
-import { reports } from "@/modules/snaptld/data/feeds";
 import { CreateReportDialog } from "@/modules/snaptld/components/CreateReportDialog";
+import { formatDateTime } from "@/modules/snaptld/lib/format";
+import type { Report } from "@/modules/snaptld/types";
 
 const formatTone = {
   pdf: "danger",
@@ -17,20 +18,21 @@ const formatTone = {
   json: "warning",
 } as const;
 
-export function ReportsPage() {
+export function ReportsPage({ initialReports }: { initialReports: Report[] }) {
   const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [reports, setReports] = useState(initialReports);
 
-  const download = (name: string) => {
-    const payload = JSON.stringify({ report: name, generatedAt: new Date().toISOString() }, null, 2);
+  const download = (report: Report) => {
+    const payload = JSON.stringify({ report: report.id, generatedAt: report.generatedAt }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name}.json`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${report.id}.json`;
+    anchor.click();
     URL.revokeObjectURL(url);
-    toast.success("Rapport nedladdad", name);
+    toast.success("Rapport nedladdad", report.title);
   };
 
   return (
@@ -46,7 +48,11 @@ export function ReportsPage() {
         </Button>
       </div>
 
-      <CreateReportDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateReportDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(report) => setReports((current) => [report, ...current])}
+      />
 
       <Table>
         <thead>
@@ -60,25 +66,25 @@ export function ReportsPage() {
           </tr>
         </thead>
         <tbody>
-          {reports.map((r) => (
-            <tr key={r.id} className="transition-colors hover:bg-bg/50">
+          {reports.map((report) => (
+            <tr key={report.id} className="transition-colors hover:bg-bg/50">
               <Td>
-                <Link href={`/snaptld/reports/${r.id}`} className="block">
-                  <div className="font-medium hover:underline">{r.title}</div>
-                  <div className="text-xs text-muted">{r.id}</div>
+                <Link href={`/snaptld/reports/${report.id}`} className="block">
+                  <div className="font-medium hover:underline">{report.title}</div>
+                  <div className="text-xs text-muted">{report.id}</div>
                 </Link>
               </Td>
-              <Td className="font-mono text-xs tabular-nums text-muted">{r.generatedAt}</Td>
-              <Td className="text-right font-medium tabular-nums">{r.domains.toLocaleString("sv-SE")}</Td>
-              <Td className="text-sm">{r.highlight}</Td>
+              <Td className="font-mono text-xs tabular-nums text-muted">{formatDateTime(report.generatedAt)}</Td>
+              <Td className="text-right font-medium tabular-nums">{report.domains.toLocaleString("sv-SE")}</Td>
+              <Td className="text-sm">{report.highlight}</Td>
               <Td>
-                <Badge tone={formatTone[r.format]}>{r.format.toUpperCase()}</Badge>
+                <Badge tone={formatTone[report.format]}>{report.format.toUpperCase()}</Badge>
               </Td>
               <Td>
                 <RowMenu
                   items={[
-                    { label: "Öppna", icon: Eye, onClick: () => window.location.assign(`/snaptld/reports/${r.id}`) },
-                    { label: "Ladda ner", icon: Download, onClick: () => download(r.id) },
+                    { label: "Öppna", icon: Eye, onClick: () => window.location.assign(`/snaptld/reports/${report.id}`) },
+                    { label: "Ladda ner", icon: Download, onClick: () => download(report) },
                     { label: "Skriv ut", icon: Printer, onClick: () => window.print() },
                   ]}
                 />
