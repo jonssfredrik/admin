@@ -1,1 +1,1 @@
-export * from "@/modules/jetwp/extended-data/core";
+export * from "@/modules/jetwp/extended-data/index";

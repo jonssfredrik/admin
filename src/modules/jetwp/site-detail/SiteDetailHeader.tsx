@@ -5,7 +5,7 @@ import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { SiteThumb } from "@/modules/jetwp/components/SiteThumb";
-import type { Site, SiteStatus } from "@/modules/jetwp/data/core";
+import type { SiteRecord, SiteStatus } from "@/modules/jetwp/data/core";
 
 const statusConfig: Record<SiteStatus, { label: string; dot: string; text: string }> = {
   online: { label: "Tillgänglig", dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
@@ -15,12 +15,13 @@ const statusConfig: Record<SiteStatus, { label: string; dot: string; text: strin
 };
 
 interface SiteDetailHeaderProps {
-  site: Site;
+  site: SiteRecord;
   onPurgeCache: () => void;
   onOpenAdmin: () => void;
+  isPurging?: boolean;
 }
 
-export function SiteDetailHeader({ site, onPurgeCache, onOpenAdmin }: SiteDetailHeaderProps) {
+export function SiteDetailHeader({ site, onPurgeCache, onOpenAdmin, isPurging = false }: SiteDetailHeaderProps) {
   const cfg = statusConfig[site.status];
 
   return (
@@ -36,11 +37,18 @@ export function SiteDetailHeader({ site, onPurgeCache, onOpenAdmin }: SiteDetail
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <h1 className="truncate text-2xl font-semibold tracking-tight">{site.name}</h1>
-              <div className={clsx("flex items-center gap-1.5 rounded-md border bg-surface px-2 py-0.5 text-xs font-medium", cfg.text)}>
+              <div
+                className={clsx(
+                  "flex items-center gap-1.5 rounded-md border bg-surface px-2 py-0.5 text-xs font-medium",
+                  cfg.text,
+                )}
+              >
                 <span className={clsx("h-1.5 w-1.5 rounded-full", cfg.dot)} />
                 {cfg.label}
               </div>
-              {site.environment === "staging" && <span className="rounded bg-fg/5 px-1.5 py-0.5 text-[10px] font-medium text-muted">TESTMILJÖ</span>}
+              {site.environment === "staging" && (
+                <span className="rounded bg-fg/5 px-1.5 py-0.5 text-[10px] font-medium text-muted">TESTMILJÖ</span>
+              )}
             </div>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted">
               <a href={`https://${site.domain}`} className="inline-flex items-center gap-1 hover:text-fg">
@@ -58,9 +66,9 @@ export function SiteDetailHeader({ site, onPurgeCache, onOpenAdmin }: SiteDetail
         </div>
 
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={onPurgeCache}>
+          <Button variant="secondary" onClick={onPurgeCache} disabled={isPurging}>
             <RefreshCw size={14} className="mr-1.5" />
-            Töm cache
+            {isPurging ? "Tömmer cache..." : "Töm cache"}
           </Button>
           <Button onClick={onOpenAdmin}>
             <ExternalLink size={14} className="mr-1.5" />

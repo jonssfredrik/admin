@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { invoiceDrafts } from "@/modules/billing/data";
+import { formatInvoiceAmount, invoiceStatusLabel } from "@/modules/billing/lib/format";
+import { listInvoices } from "@/modules/billing/lib/invoices";
 import { domainAnalyses } from "@/modules/snaptld/data";
 import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
 import {
@@ -29,6 +30,7 @@ const verdictLabel = {
 export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
   const eventStore = useEvents();
   const subscriptions = useSubscriptions();
+  const billingInvoices = listInvoices();
 
   const externalEvents = useMemo<ResolvedCalendarEvent[]>(() => {
     const subscriptionEvents = subscriptions.items
@@ -50,22 +52,22 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
         actionLabel: "Öppna abonnemang",
       }));
 
-    const billingEvents = invoiceDrafts
+    const billingEvents = billingInvoices
       .filter((invoice) => invoice.status !== "paid")
       .map((invoice) => ({
         id: invoice.id,
         instanceId: `billing:${invoice.id}:${invoice.dueDate}`,
         entityId: invoice.id,
         title: `Faktura ${invoice.id}`,
-        description: `${invoice.customer} · ${invoice.amount}`,
+        description: `${invoice.customerName} · ${formatInvoiceAmount(invoice.amountOre, invoice.currency)}`,
         date: invoice.dueDate,
         category: "deadline" as const,
         source: "billing" as const,
         sourceRef: invoice.id,
         href: `/billing/${invoice.id}`,
         isAggregated: true,
-        statusLabel: invoice.status === "sent" ? "Skickad" : "Utkast",
-        sourceDetail: invoice.company,
+        statusLabel: invoiceStatusLabel[invoice.status],
+        sourceDetail: invoice.companyName,
         actionLabel: "Öppna faktura",
       }));
 
@@ -87,7 +89,7 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
     }));
 
     return [...subscriptionEvents, ...billingEvents, ...snaptldEvents];
-  }, [subscriptions.items]);
+  }, [billingInvoices, subscriptions.items]);
 
   const events = useMemo(() => {
     const sourceSet = new Set(enabledSources);

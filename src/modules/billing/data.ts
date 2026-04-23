@@ -1,39 +1,44 @@
-export interface InvoiceDraft {
-  id: string;
-  company: string;
-  customer: string;
-  status: "draft" | "sent" | "paid";
-  amount: string;
-  dueDate: string;
-  category: "consulting" | "hosting" | "subscription";
-}
+import type { Invoice } from "@/modules/billing/types";
 
-export const invoiceDrafts: InvoiceDraft[] = [
+export const invoices: Invoice[] = [
   {
     id: "inv-2026-041",
-    company: "Nordic Ops AB",
-    customer: "Arctic Outdoor Co.",
+    companyId: "co-nordic-ops",
+    companyName: "Nordic Ops AB",
+    customerId: "cust-arctic-outdoor",
+    customerName: "Arctic Outdoor Co.",
     status: "draft",
-    amount: "18 500 kr",
+    amountOre: 1850000,
+    currency: "SEK",
     dueDate: "2026-04-30",
+    issuedDate: "2026-04-16",
     category: "hosting",
   },
   {
     id: "inv-2026-038",
-    company: "Studio Fredrik",
-    customer: "Lagom Interiör",
+    companyId: "co-studio-fredrik",
+    companyName: "Studio Fredrik",
+    customerId: "cust-lagom-interior",
+    customerName: "Lagom Interiör",
     status: "sent",
-    amount: "7 200 kr",
+    amountOre: 720000,
+    currency: "SEK",
     dueDate: "2026-04-24",
+    issuedDate: "2026-04-10",
     category: "consulting",
   },
   {
     id: "inv-2026-031",
-    company: "Nordic Ops AB",
-    customer: "SaaS Atlas",
+    companyId: "co-nordic-ops",
+    companyName: "Nordic Ops AB",
+    customerId: "cust-saas-atlas",
+    customerName: "SaaS Atlas",
     status: "paid",
-    amount: "3 400 kr",
+    amountOre: 340000,
+    currency: "SEK",
     dueDate: "2026-04-12",
+    issuedDate: "2026-03-29",
+    paidDate: "2026-04-11",
     category: "subscription",
   },
 ];

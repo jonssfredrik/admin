@@ -6,8 +6,6 @@ export type JobType =
   | "plugin.update"
   | "theme.update"
   | "plugin.install"
-  | "backup.create"
-  | "backup.restore"
   | "cache.flush"
   | "db.optimize"
   | "integrity.check"
@@ -38,17 +36,15 @@ export interface Job {
 }
 
 const jobTypeLabel: Record<JobType, string> = {
-  "core.update": "WP-kärnuppdatering",
+  "core.update": "WP-karnuppdatering",
   "plugin.update": "Plugin-uppdatering",
   "theme.update": "Tema-uppdatering",
   "plugin.install": "Installera plugin",
-  "backup.create": "Skapa backup",
-  "backup.restore": "Återställ backup",
   "cache.flush": "Rensa cache",
   "db.optimize": "Optimera databas",
   "integrity.check": "Integritetskontroll",
   rollback: "Rollback",
-  "ssl.renew": "Förnya SSL",
+  "ssl.renew": "Fornya SSL",
   "agent.upgrade": "Uppgradera agent",
 };
 
@@ -91,7 +87,7 @@ export const jobs: Job[] = [
   {
     id: "job-1043",
     siteId: "site-5",
-    type: "backup.create",
+    type: "db.optimize",
     status: "running",
     priority: "urgent",
     createdAt: "14:18:34",
@@ -100,7 +96,7 @@ export const jobs: Job[] = [
     maxAttempts: 2,
     createdBy: "Fredrik",
     strategy: "immediate",
-    params: [{ label: "Typ", value: "full" }, { label: "Retention", value: "7 dagar" }],
+    params: [{ label: "Omfang", value: "tabeller + transienter" }],
   },
   {
     id: "job-1042",
@@ -133,7 +129,7 @@ export const jobs: Job[] = [
   {
     id: "job-1040",
     siteId: "site-1",
-    type: "backup.create",
+    type: "integrity.check",
     status: "completed",
     priority: "normal",
     createdAt: "14:00:00",
@@ -142,7 +138,7 @@ export const jobs: Job[] = [
     duration: "4m 16s",
     attempts: 1,
     maxAttempts: 2,
-    createdBy: "cron:nightly-backup",
+    createdBy: "cron:nightly-integrity",
     strategy: "scheduled",
   },
   {
@@ -185,7 +181,7 @@ export const jobs: Job[] = [
     maxAttempts: 2,
     createdBy: "Greta T.",
     strategy: "immediate",
-    output: "Avbruten manuellt - väntar på DNS-propagering",
+    output: "Avbruten manuellt - vantar pa DNS-propagering",
   },
   {
     id: "job-1036",
@@ -214,7 +210,7 @@ export const jobs: Job[] = [
     maxAttempts: 2,
     createdBy: "Fredrik",
     strategy: "canary",
-    params: [{ label: "Från", value: "6.4.2" }, { label: "Till", value: "6.5.3" }],
+    params: [{ label: "Fran", value: "6.4.2" }, { label: "Till", value: "6.5.3" }],
   },
   {
     id: "job-1034",
@@ -236,18 +232,16 @@ export const jobs: Job[] = [
 export const jobsForSite = (siteId: string) => jobs.filter((j) => j.siteId === siteId);
 
 export const jobTypes: { value: JobType; label: string; description: string; paramFields?: { name: string; label: string; placeholder?: string; kind?: "text" | "select"; options?: string[] }[] }[] = [
-  { value: "core.update", label: "Uppdatera WP-kärna", description: "Uppgradera WordPress till senaste version", paramFields: [{ name: "targetVersion", label: "Målversion", placeholder: "t.ex. 6.5.3" }] },
+  { value: "core.update", label: "Uppdatera WP-karna", description: "Uppgradera WordPress till senaste version", paramFields: [{ name: "targetVersion", label: "Malversion", placeholder: "t.ex. 6.5.3" }] },
   { value: "plugin.update", label: "Uppdatera plugin", description: "Uppdatera ett eller flera plugins", paramFields: [{ name: "plugins", label: "Plugins (komma-separerade)", placeholder: "yoast, wordfence" }] },
   { value: "theme.update", label: "Uppdatera tema", description: "Uppdatera aktivt tema till ny version", paramFields: [{ name: "theme", label: "Tema-slug", placeholder: "kadence" }] },
-  { value: "plugin.install", label: "Installera plugin", description: "Installera från WP.org eller ZIP", paramFields: [{ name: "slug", label: "Slug eller ZIP-url", placeholder: "akismet" }] },
-  { value: "backup.create", label: "Skapa backup", description: "Full eller inkrementell backup", paramFields: [{ name: "type", label: "Typ", kind: "select", options: ["full", "inkrementell"] }, { name: "retention", label: "Retention (dagar)", placeholder: "30" }] },
-  { value: "backup.restore", label: "Återställ backup", description: "Rulla tillbaka till ett tidigare tillstånd", paramFields: [{ name: "backupId", label: "Backup-id", placeholder: "b-123" }] },
-  { value: "cache.flush", label: "Rensa cache", description: "Töm object- och page-cache" },
-  { value: "db.optimize", label: "Optimera databas", description: "Kör OPTIMIZE TABLE + cleanup" },
-  { value: "integrity.check", label: "Integritetskontroll", description: "Verifiera kärnfiler och checksums" },
-  { value: "rollback", label: "Rollback", description: "Återställ från senaste backup" },
+  { value: "plugin.install", label: "Installera plugin", description: "Installera fran WP.org eller ZIP", paramFields: [{ name: "slug", label: "Slug eller ZIP-url", placeholder: "akismet" }] },
+  { value: "cache.flush", label: "Rensa cache", description: "Tom object- och page-cache" },
+  { value: "db.optimize", label: "Optimera databas", description: "Kor OPTIMIZE TABLE + cleanup" },
+  { value: "integrity.check", label: "Integritetskontroll", description: "Verifiera karnfiler och checksums" },
+  { value: "rollback", label: "Rollback", description: "Rulla tillbaka senaste andring" },
   { value: "ssl.renew", label: "Förnya SSL", description: "Kör Let's Encrypt-förnyelse" },
-  { value: "agent.upgrade", label: "Uppgradera agent", description: "Uppgradera jetwp-agent på sajten", paramFields: [{ name: "targetVersion", label: "Målversion", placeholder: "0.8.2" }] },
+  { value: "agent.upgrade", label: "Uppgradera agent", description: "Uppgradera jetwp-agent pa sajten", paramFields: [{ name: "targetVersion", label: "Malversion", placeholder: "0.8.2" }] },
 ];
 
 export type AlertSeverity = "info" | "warning" | "critical";
@@ -267,14 +261,14 @@ export interface Alert {
 }
 
 export const alerts: Alert[] = [
-  { id: "al-1", kind: "missed_heartbeat", severity: "critical", status: "open", siteId: "site-5", title: "Missad heartbeat - arcticoutdoor.com", description: "Agenten har inte rapporterat in sedan 13:38. Förväntas var 30:e sekund.", createdAt: "för 42 min sedan", source: "jetwp-agent" },
-  { id: "al-2", kind: "failed_job", severity: "critical", status: "open", siteId: "site-5", title: "Plugin-uppdatering misslyckades (3/3 försök)", description: "job-1045 · elementor → fatal error efter update. Rollback kördes automatiskt.", createdAt: "för 15 min sedan", source: "jobs" },
-  { id: "al-3", kind: "ssl_expiring", severity: "warning", status: "open", siteId: "site-2", title: "SSL går ut om 12 dagar", description: "lagominterior.se · certbot-förnyelse fastnade i DNS-verifiering.", createdAt: "för 3 tim sedan", source: "monitoring" },
-  { id: "al-4", kind: "security_update", severity: "warning", status: "open", siteId: "site-2", title: "Kritisk säkerhetsuppdatering tillgänglig", description: "Wordfence 7.11.6 innehåller fix för CVE-2026-1042. 2 sajter påverkade.", createdAt: "för 5 tim sedan", source: "inventory" },
-  { id: "al-5", kind: "stale_telemetry", severity: "warning", status: "acked", siteId: "site-5", title: "Stale telemetry > 30 min", description: "Senaste telemetri från arcticoutdoor.com är 42 min gammal.", createdAt: "för 1 tim sedan", source: "jetwp-agent" },
-  { id: "al-6", kind: "disk_space", severity: "warning", status: "open", siteId: "site-2", title: "Disk > 90% full", description: "lagominterior.se · 9.1/10 GB i bruk. Överväg att rensa media eller uppgradera plan.", createdAt: "för 2 tim sedan", source: "monitoring" },
+  { id: "al-1", kind: "missed_heartbeat", severity: "critical", status: "open", siteId: "site-5", title: "Missad agentincheckning - arcticoutdoor.com", description: "JetWP-agenten har inte rapporterat in sedan 13:38. Förväntas var 30:e sekund.", createdAt: "för 42 min sedan", source: "jetwp-agent" },
+  { id: "al-2", kind: "failed_job", severity: "critical", status: "open", siteId: "site-5", title: "Plugin-uppdatering misslyckades (3/3 försök)", description: "job-1045 · elementor -> fatal error efter update. Jobbet stoppades för manuell kontroll.", createdAt: "för 15 min sedan", source: "jobs" },
+  { id: "al-3", kind: "ssl_expiring", severity: "warning", status: "open", siteId: "site-2", title: "SSL går ut om 12 dagar", description: "lagominterior.se · automatisk SSL-förnyelse behöver kontrolleras.", createdAt: "för 3 tim sedan", source: "agent" },
+  { id: "al-4", kind: "security_update", severity: "warning", status: "open", siteId: "site-2", title: "Kritisk säkerhetsuppdatering tillgänglig", description: "Wordfence 7.11.6 innehåller fix för CVE-2026-1042. 2 sajter påverkas.", createdAt: "för 5 tim sedan", source: "inventory" },
+  { id: "al-5", kind: "stale_telemetry", severity: "warning", status: "acked", siteId: "site-5", title: "Fördröjd agentdata > 30 min", description: "Senaste agentdata från arcticoutdoor.com är 42 min gammal.", createdAt: "för 1 tim sedan", source: "jetwp-agent" },
+  { id: "al-6", kind: "disk_space", severity: "warning", status: "open", siteId: "site-2", title: "Webbutrymme > 90% använt", description: "lagominterior.se · 9.1/10 GB i bruk. Överväg att rensa media eller uppgradera webbhotellspaketet.", createdAt: "för 2 tim sedan", source: "agent" },
   { id: "al-7", kind: "failed_job", severity: "info", status: "resolved", siteId: "site-5", title: "SSL-förnyelse avbruten", description: "job-1037 avbröts manuellt av Greta T.", createdAt: "för 4 tim sedan", source: "jobs" },
-  { id: "al-8", kind: "missed_heartbeat", severity: "info", status: "resolved", siteId: "site-4", title: "Heartbeat återupptagen", description: "fjallkliniken.se är tillbaka efter planerat underhåll.", createdAt: "igår", source: "jetwp-agent" },
+  { id: "al-8", kind: "missed_heartbeat", severity: "info", status: "resolved", siteId: "site-4", title: "Heartbeat aterupptagen", description: "fjallkliniken.se ar tillbaka efter planerat underhall.", createdAt: "igar", source: "jetwp-agent" },
 ];
 
 export interface InventoryItem {

@@ -110,9 +110,17 @@ export function DomainsTab({ siteId, domain, sslDays }: DomainsTabProps) {
           <div className="border-b px-5 py-3 text-sm font-semibold tracking-tight">Domänöversikt</div>
           <div className="divide-y divide-border/60">
             {domains.map((entry) => (
-              <button
+              <div
                 key={entry.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedDomainId(entry.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedDomainId(entry.id);
+                  }
+                }}
                 className={clsx("flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-bg/50", selected?.id === entry.id && "bg-bg/60")}
               >
                 <div className="min-w-0 flex-1">
@@ -143,7 +151,7 @@ export function DomainsTab({ siteId, domain, sslDays }: DomainsTabProps) {
                     <Trash2 size={13} />
                   </button>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         </Card>

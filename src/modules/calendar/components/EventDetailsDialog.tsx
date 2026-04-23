@@ -15,7 +15,12 @@ import {
 } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { invoiceDrafts } from "@/modules/billing/data";
+import {
+  formatInvoiceAmount,
+  invoiceCategoryLabel,
+  invoiceStatusLabel,
+} from "@/modules/billing/lib/format";
+import { getInvoiceById } from "@/modules/billing/lib/invoices";
 import {
   categoryMeta,
   daysUntil,
@@ -82,9 +87,18 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
   const tone = getEventTone(event);
   const category = categoryMeta[event.category];
   const source = sourceMeta[event.source];
-  const subscription = event.source === "subscriptions" ? subscriptions.find((item) => item.id === event.sourceRef) : null;
-  const invoice = event.source === "billing" ? invoiceDrafts.find((item) => item.id === event.sourceRef) : null;
-  const domain = event.source === "snaptld" ? domainAnalyses.find((item) => item.slug === event.sourceRef) : null;
+  const subscription =
+    event.source === "subscriptions" && event.sourceRef
+      ? subscriptions.find((item) => item.id === event.sourceRef) ?? null
+      : null;
+  const invoice =
+    event.source === "billing" && event.sourceRef
+      ? getInvoiceById(event.sourceRef) ?? null
+      : null;
+  const domain =
+    event.source === "snaptld" && event.sourceRef
+      ? domainAnalyses.find((item) => item.slug === event.sourceRef) ?? null
+      : null;
   const dayOffset = daysUntil(event.date);
 
   const relativeLabel =
@@ -207,11 +221,11 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
                 <InfoGrid
                   items={[
                     { label: "Faktura", value: invoice.id },
-                    { label: "Bolag", value: invoice.company },
-                    { label: "Kund", value: invoice.customer },
-                    { label: "Belopp", value: invoice.amount },
-                    { label: "Status", value: invoice.status === "draft" ? "Utkast" : "Skickad" },
-                    { label: "Kategori", value: invoice.category },
+                    { label: "Bolag", value: invoice.companyName },
+                    { label: "Kund", value: invoice.customerName },
+                    { label: "Belopp", value: formatInvoiceAmount(invoice.amountOre, invoice.currency) },
+                    { label: "Status", value: invoiceStatusLabel[invoice.status] },
+                    { label: "Kategori", value: invoiceCategoryLabel[invoice.category] },
                   ]}
                 />
               </div>

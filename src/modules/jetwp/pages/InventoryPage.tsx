@@ -13,10 +13,9 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Table";
 import { useToast } from "@/components/toast/ToastProvider";
 import { coreInventory, pluginInventory, siteDomain, siteName, themeInventory, type InventoryItem } from "@/modules/jetwp/data";
+import { getInventoryRows, getInventoryStats, type InventoryFilter, type InventoryTab } from "@/modules/jetwp/selectors/inventory";
 
-type Tab = "core" | "plugins" | "themes";
-
-const tabCfg: Record<Tab, { label: string; Icon: typeof Box; data: InventoryItem[] }> = {
+const tabCfg: Record<InventoryTab, { label: string; Icon: typeof Box; data: InventoryItem[] }> = {
   core: { label: "Kärna", Icon: Box, data: coreInventory },
   plugins: { label: "Plugin", Icon: Package, data: pluginInventory },
   themes: { label: "Teman", Icon: Palette, data: themeInventory },
@@ -25,25 +24,13 @@ const tabCfg: Record<Tab, { label: string; Icon: typeof Box; data: InventoryItem
 export function InventoryPage() {
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("plugins");
+  const [tab, setTab] = useState<InventoryTab>("plugins");
   const [query, setQuery] = useState("");
-  const [only, setOnly] = useState<"all" | "updates">("all");
+  const [only, setOnly] = useState<InventoryFilter>("all");
 
   const data = tabCfg[tab].data;
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return data.filter((item) => {
-      if (only === "updates" && item.sitesWithUpdate === 0) return false;
-      if (!normalized) return true;
-      return item.name.toLowerCase().includes(normalized) || item.slug.includes(normalized);
-    });
-  }, [data, only, query]);
-
-  const totalUpdates = {
-    core: coreInventory.reduce((sum, item) => sum + item.sitesWithUpdate, 0),
-    plugins: pluginInventory.reduce((sum, item) => sum + item.sitesWithUpdate, 0),
-    themes: themeInventory.reduce((sum, item) => sum + item.sitesWithUpdate, 0),
-  };
+  const filtered = useMemo(() => getInventoryRows(data, query, only), [data, only, query]);
+  const stats = useMemo(() => getInventoryStats(coreInventory, pluginInventory, themeInventory), []);
 
   return (
     <div className="space-y-6">
@@ -53,25 +40,22 @@ export function InventoryPage() {
           JetWP
         </Link>
         <div className="mt-3">
-          <PageHeader title="Inventering" subtitle="Versioner av kärna, plugin och teman över hela den hanterade WordPress-flottan." />
+          <PageHeader
+            title="Inventering"
+            subtitle="Versioner av kärna, plugin och teman över hela den hanterade WordPress-flottan."
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Kärnuppdateringar" value={String(totalUpdates.core)} />
-        <StatCard label="Pluginuppdateringar" value={String(totalUpdates.plugins)} />
-        <StatCard label="Temauppdateringar" value={String(totalUpdates.themes)} />
-        <StatCard
-          label="Installationer"
-          value={String(
-            pluginInventory.reduce((sum, item) => sum + item.installed.length, 0) +
-              themeInventory.reduce((sum, item) => sum + item.installed.length, 0),
-          )}
-        />
+        <StatCard label="Kärnuppdateringar" value={String(stats.coreUpdates)} />
+        <StatCard label="Pluginuppdateringar" value={String(stats.pluginUpdates)} />
+        <StatCard label="Temauppdateringar" value={String(stats.themeUpdates)} />
+        <StatCard label="Installationer" value={String(stats.installations)} />
       </div>
 
       <div className="flex rounded-xl border bg-bg p-1">
-        {(Object.keys(tabCfg) as Tab[]).map((key) => {
+        {(Object.keys(tabCfg) as InventoryTab[]).map((key) => {
           const { Icon, label } = tabCfg[key];
           const active = tab === key;
           return (
@@ -95,7 +79,12 @@ export function InventoryPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[200px] flex-1">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <Input className="pl-9" placeholder={`Sök ${tabCfg[tab].label.toLowerCase()}...`} value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input
+              className="pl-9"
+              placeholder={`Sök ${tabCfg[tab].label.toLowerCase()}...`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </div>
           <div className="flex rounded-lg border bg-bg p-0.5">
             {(["all", "updates"] as const).map((filter) => (
@@ -125,7 +114,9 @@ export function InventoryPage() {
             }}
           />
         ))}
-        {filtered.length === 0 && <Card className="p-10 text-center text-sm text-muted">Inga inventeringsrader matchade filtret.</Card>}
+        {filtered.length === 0 && (
+          <Card className="p-10 text-center text-sm text-muted">Inga inventeringsrader matchade filtret.</Card>
+        )}
       </div>
     </div>
   );
@@ -153,7 +144,12 @@ function InventoryCard({ item, onQueueUpdate }: { item: InventoryItem; onQueueUp
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => toast.info(`${item.name} ${item.latestVersion}`, "Kompatibilitetsförbättringar, säkrare cachehantering och adminpolish.")}>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              toast.info(`${item.name} ${item.latestVersion}`, "Kompatibilitetsförbättringar, säkrare cachehantering och adminpolish.")
+            }
+          >
             <FileText size={13} className="mr-1.5" />
             Ändringslogg
           </Button>
@@ -174,9 +170,14 @@ function InventoryCard({ item, onQueueUpdate }: { item: InventoryItem; onQueueUp
             </Link>
             <span className="font-mono text-[12px] tabular-nums">{install.version}</span>
             {install.updateAvailable ? <Badge tone="warning">→ {item.latestVersion}</Badge> : <Badge tone="success">aktuell</Badge>}
-            {install.active !== undefined && <span className="w-14 text-right text-[11px] text-muted">{install.active ? "aktiv" : "inaktiv"}</span>}
+            {install.active !== undefined && (
+              <span className="w-14 text-right text-[11px] text-muted">{install.active ? "aktiv" : "inaktiv"}</span>
+            )}
             {install.updateAvailable && (
-              <button onClick={() => router.push(`/jetwp/jobs/new?site=${install.siteId}`)} className="rounded-md border bg-surface px-2 py-1 text-[11px] font-medium hover:bg-bg">
+              <button
+                onClick={() => router.push(`/jetwp/jobs/new?site=${install.siteId}`)}
+                className="rounded-md border bg-surface px-2 py-1 text-[11px] font-medium hover:bg-bg"
+              >
                 Uppdateringsjobb
               </button>
             )}

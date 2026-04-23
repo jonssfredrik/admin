@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/Table";
 import { RowMenu, type RowMenuEntry } from "@/components/ui/RowMenu";
 import { useToast } from "@/components/toast/ToastProvider";
 import { jobs, JOB_TYPE_LABEL, siteDomain, siteName, sites, type Job, type JobStatus, type JobType } from "@/modules/jetwp/data";
+import { getFilteredJobs, getJobStatusCounts } from "@/modules/jetwp/selectors/jobs";
 
 const statusCfg: Record<JobStatus, { label: string; dot: string; tone: string; Icon: typeof Clock }> = {
   pending: { label: "Väntande", dot: "bg-amber-500", tone: "text-amber-600 dark:text-amber-400", Icon: Clock },
@@ -59,21 +60,10 @@ export function JobsPage() {
   const [type, setType] = useState<"all" | JobType>("all");
   const [site, setSite] = useState<"all" | string>("all");
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return jobs.filter((job) => {
-      if (status !== "all" && job.status !== status) return false;
-      if (type !== "all" && job.type !== type) return false;
-      if (site !== "all" && job.siteId !== site) return false;
-      if (!normalized) return true;
-      return (
-        job.id.includes(normalized) ||
-        job.type.includes(normalized) ||
-        siteName(job.siteId).toLowerCase().includes(normalized) ||
-        job.createdBy.toLowerCase().includes(normalized)
-      );
-    });
-  }, [query, site, status, type]);
+  const filtered = useMemo(
+    () => getFilteredJobs(jobs, { query, status, type, site }, sites),
+    [query, site, status, type],
+  );
 
   const menuFor = (job: Job): RowMenuEntry[] => [
     { label: "Öppna detaljer", icon: ArrowRight, onClick: () => router.push(`/jetwp/jobs/${job.id}`) },
@@ -88,17 +78,7 @@ export function JobsPage() {
       : []),
   ];
 
-  const statusCounts: Record<JobStatus, number> = {
-    pending: 0,
-    claimed: 0,
-    running: 0,
-    completed: 0,
-    failed: 0,
-    cancelled: 0,
-  };
-  jobs.forEach((job) => {
-    statusCounts[job.status]++;
-  });
+  const statusCounts = useMemo(() => getJobStatusCounts(jobs), []);
 
   const types = Array.from(new Set(jobs.map((job) => job.type))) as JobType[];
 

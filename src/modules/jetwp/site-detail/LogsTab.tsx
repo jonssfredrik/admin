@@ -11,7 +11,7 @@ import { logs as baseLogs } from "@/modules/jetwp/[id]/data";
 export function LogsTab() {
   const toast = useToast();
   const [level, setLevel] = useState<"all" | "info" | "warn" | "error">("all");
-  const [source, setSource] = useState<"all" | "php" | "wp" | "access" | "cron" | "backup" | "security" | "cache" | "db">("all");
+  const [source, setSource] = useState<"all" | "php" | "wp" | "access" | "cron" | "security" | "cache" | "db">("all");
   const [period, setPeriod] = useState<"15m" | "1h" | "24h">("1h");
 
   const accessLogs = [
@@ -56,7 +56,6 @@ export function LogsTab() {
             <option value="wp">WP-debugg</option>
             <option value="access">Access</option>
             <option value="cron">Cron</option>
-            <option value="backup">Backup</option>
             <option value="security">Säkerhet</option>
             <option value="db">Databas</option>
           </select>

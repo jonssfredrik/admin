@@ -7,15 +7,16 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Table";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/toast/ToastProvider";
-import type { Site } from "@/modules/jetwp/data/core";
 import { themes, type Theme } from "@/modules/jetwp/[id]/data";
 
 interface ThemesTabProps {
-  site: Site;
+  activeTheme: string;
+  themeVersion: string;
+  themeUpdateAvailable: boolean;
 }
 
-export function ThemesTab({ site }: ThemesTabProps) {
-  const [list, setList] = useState<Theme[]>(() => themes(site.activeTheme, site.themeVersion, site.themeUpdateAvailable));
+export function ThemesTab({ activeTheme, themeVersion, themeUpdateAvailable }: ThemesTabProps) {
+  const [list, setList] = useState<Theme[]>(() => themes(activeTheme, themeVersion, themeUpdateAvailable));
   const toast = useToast();
   const [toActivate, setToActivate] = useState<Theme | null>(null);
 

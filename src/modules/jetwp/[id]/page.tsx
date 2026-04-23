@@ -1,53 +1,92 @@
 "use client";
 
-import { use, useState } from "react";
-import { notFound } from "next/navigation";
-import { FileText, Globe, HardDrive, LayoutDashboard, Package, Palette, Settings as SettingsIcon } from "lucide-react";
+import { use, useEffect, useState } from "react";
+import { notFound, useRouter, useSearchParams } from "next/navigation";
+import {
+  FileText,
+  Globe,
+  LayoutDashboard,
+  Package,
+  Palette,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/toast/ToastProvider";
-import { sites } from "../data";
+import { getSiteRecord } from "@/modules/jetwp/data";
+import { alerts } from "@/modules/jetwp/fleet/core";
 import { SiteDetailHeader } from "@/modules/jetwp/site-detail/SiteDetailHeader";
 import { OverviewTab } from "@/modules/jetwp/site-detail/OverviewTab";
 import { PluginsTab } from "@/modules/jetwp/site-detail/PluginsTab";
 import { ThemesTab } from "@/modules/jetwp/site-detail/ThemesTab";
-import { BackupsTab } from "@/modules/jetwp/site-detail/BackupsTab";
 import { DomainsTab } from "@/modules/jetwp/site-detail/DomainsTab";
 import { LogsTab } from "@/modules/jetwp/site-detail/LogsTab";
 import { SettingsTab } from "@/modules/jetwp/site-detail/SettingsTab";
+import {
+  getSiteOverviewModel,
+  isSiteDetailTab,
+  type SiteDetailTabId,
+} from "@/modules/jetwp/selectors/site-detail";
+import { useMockActionState, waitForMockAction } from "@/modules/jetwp/lib/useMockActionState";
 
 const tabs = [
   { id: "overview", label: "Översikt", icon: LayoutDashboard },
   { id: "plugins", label: "Plugin", icon: Package },
   { id: "themes", label: "Teman", icon: Palette },
-  { id: "backups", label: "Backuper", icon: HardDrive },
   { id: "domains", label: "Domäner", icon: Globe },
   { id: "logs", label: "Loggar", icon: FileText },
   { id: "settings", label: "Inställningar", icon: SettingsIcon },
 ] as const;
 
-type TabId = (typeof tabs)[number]["id"];
-
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const site = sites.find((entry) => entry.id === id);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
-  const [tab, setTab] = useState<TabId>("overview");
+  const purgeAction = useMockActionState();
+  const site = getSiteRecord(id);
+  const requestedTab = searchParams.get("tab");
+  const [tab, setTab] = useState<SiteDetailTabId>(isSiteDetailTab(requestedTab) ? requestedTab : "overview");
 
   if (!site) notFound();
+
+  useEffect(() => {
+    setTab(isSiteDetailTab(requestedTab) ? requestedTab : "overview");
+  }, [requestedTab]);
+
+  const selectTab = (nextTab: SiteDetailTabId) => {
+    setTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (nextTab === "overview") nextParams.delete("tab");
+    else nextParams.set("tab", nextTab);
+    const query = nextParams.toString();
+    router.replace(query ? `/jetwp/${id}?${query}` : `/jetwp/${id}`);
+  };
+
+  const handlePurgeCache = async () => {
+    try {
+      await purgeAction.run(async () => {
+        await waitForMockAction(400);
+      });
+      toast.success("Cache rensad", site.name);
+    } catch {}
+  };
+
+  const overview = getSiteOverviewModel(site, alerts);
 
   return (
     <div className="space-y-6">
       <SiteDetailHeader
         site={site}
-        onPurgeCache={() => toast.success("Cache rensad", site.name)}
+        onPurgeCache={handlePurgeCache}
         onOpenAdmin={() => toast.info("Öppnar", `${site.domain}/wp-admin`)}
+        isPurging={purgeAction.isPending}
       />
 
       <div className="flex gap-1 border-b">
         {tabs.map(({ id: tabId, label, icon: Icon }) => (
           <button
             key={tabId}
-            onClick={() => setTab(tabId)}
+            onClick={() => selectTab(tabId)}
             className={clsx(
               "relative flex items-center gap-1.5 px-3 py-2 text-sm transition-colors",
               tab === tabId ? "font-medium text-fg" : "text-muted hover:text-fg",
@@ -60,10 +99,15 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab siteId={site.id} site={site} />}
+      {tab === "overview" && <OverviewTab overview={overview} />}
       {tab === "plugins" && <PluginsTab updatesAvailable={site.updatesAvailable} />}
-      {tab === "themes" && <ThemesTab site={site} />}
-      {tab === "backups" && <BackupsTab siteId={site.id} />}
+      {tab === "themes" && (
+        <ThemesTab
+          activeTheme={site.activeTheme}
+          themeVersion={site.themeVersion}
+          themeUpdateAvailable={site.themeUpdateAvailable}
+        />
+      )}
       {tab === "domains" && <DomainsTab siteId={site.id} domain={site.domain} sslDays={site.sslDays} />}
       {tab === "logs" && <LogsTab />}
       {tab === "settings" && <SettingsTab siteId={site.id} php={site.php} />}

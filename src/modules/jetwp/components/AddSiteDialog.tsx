@@ -6,12 +6,13 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Input, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/toast/ToastProvider";
+import { useMockActionState, waitForMockAction } from "@/modules/jetwp/lib/useMockActionState";
 
 const installModes = [
   {
     id: "provision",
     title: "Ny WordPress-installation",
-    description: "JetWP provisionerar databas, SSL, baseline-backup och agent automatiskt.",
+    description: "JetWP provisionerar databas, SSL, baseline-hardening och agent automatiskt.",
   },
   {
     id: "pair",
@@ -29,12 +30,12 @@ const baselineProfiles = [
   {
     id: "standard",
     title: "Standard managed",
-    description: "Säkerhetskopia, säkerhetsskanning, cache och incheckningar aktiveras.",
+    description: "Säkerhetsskanning, cache och incheckningar aktiveras.",
   },
   {
     id: "commerce",
     title: "WooCommerce",
-    description: "Extra backupfrekvens, checkout-övervakning och seriella uppdateringar.",
+    description: "Checkout-overvakning och seriella uppdateringar.",
   },
   {
     id: "content",
@@ -55,7 +56,7 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [environment, setEnvironment] = useState<Environment>("production");
   const [profile, setProfile] = useState<BaselineProfile>("standard");
   const [region, setRegion] = useState("Stockholm");
-  const [loading, setLoading] = useState(false);
+  const createAction = useMockActionState();
   const toast = useToast();
 
   const reset = () => {
@@ -66,6 +67,7 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
     setEnvironment("production");
     setProfile("standard");
     setRegion("Stockholm");
+    createAction.reset();
   };
 
   const close = () => {
@@ -73,15 +75,16 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
     onClose();
   };
 
-  const submit = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+  const submit = async () => {
+    try {
+      await createAction.run(async () => {
+        await waitForMockAction(900);
+      });
       const modeLabel = installModes.find((item) => item.id === installMode)?.title ?? installMode;
       const profileLabel = baselineProfiles.find((item) => item.id === profile)?.title ?? profile;
       toast.success("Sajt skapas", `${name} (${domain}) · ${modeLabel} · ${profileLabel} · ${region}`);
       close();
-    }, 900);
+    } catch {}
   };
 
   return (
@@ -101,8 +104,10 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
           </>
         ) : (
           <>
-            <Button variant="secondary" onClick={() => setStep(1)}>Tillbaka</Button>
-            <Button onClick={submit} disabled={loading}>{loading ? "Skapar..." : "Skapa sajt"}</Button>
+            <Button variant="secondary" onClick={() => setStep(1)} disabled={createAction.isPending}>Tillbaka</Button>
+            <Button onClick={submit} disabled={createAction.isPending}>
+              {createAction.isPending ? "Skapar..." : "Skapa sajt"}
+            </Button>
           </>
         )
       }
@@ -136,9 +141,11 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
                 <button
                   key={mode.id}
                   onClick={() => setInstallMode(mode.id)}
+                  disabled={createAction.isPending}
                   className={clsx(
                     "h-full rounded-xl border bg-surface p-3.5 text-left transition-colors",
                     installMode === mode.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                    createAction.isPending && "opacity-60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -159,9 +166,11 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
                   <button
                     key={item.id}
                     onClick={() => setEnvironment(item.id)}
+                    disabled={createAction.isPending}
                     className={clsx(
                       "w-full rounded-xl border bg-surface p-3 text-left transition-colors",
                       environment === item.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                      createAction.isPending && "opacity-60",
                     )}
                   >
                     <div className="font-medium">{item.title}</div>
@@ -177,6 +186,7 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
                 value={region}
                 onChange={(event) => setRegion(event.target.value)}
                 className="w-full rounded-lg border bg-surface px-3 py-2 text-sm"
+                disabled={createAction.isPending}
               >
                 <option>Stockholm</option>
                 <option>Göteborg</option>
@@ -189,9 +199,11 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
                   <button
                     key={item.id}
                     onClick={() => setProfile(item.id)}
+                    disabled={createAction.isPending}
                     className={clsx(
                       "w-full rounded-xl border bg-surface p-3 text-left transition-colors",
                       profile === item.id ? "border-fg/40 ring-2 ring-fg/5" : "hover:border-fg/20",
+                      createAction.isPending && "opacity-60",
                     )}
                   >
                     <div className="font-medium">{item.title}</div>
@@ -206,7 +218,7 @@ export function AddSiteDialog({ open, onClose }: { open: boolean; onClose: () =>
             <div className="text-xs font-medium uppercase tracking-wider text-muted">Detta sker vid skapande</div>
             <ul className="mt-2 space-y-1.5 text-sm text-muted">
               <li>DNS och SSL förbereds för {domain || "vald domän"}.</li>
-              <li>Agent, incheckning och baseline-säkerhetskopia aktiveras.</li>
+              <li>Agent, incheckning och baseline-hardening aktiveras.</li>
               <li>
                 {environment === "staging"
                   ? "Sajten markeras som testmiljö och deploys blockeras mot publik trafik."

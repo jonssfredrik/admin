@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -7,22 +5,17 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
-import { invoiceDrafts } from "@/modules/billing/data";
+import { formatInvoiceAmount, invoiceStatusLabel, invoiceStatusTone } from "@/modules/billing/lib/format";
+import { listInvoices } from "@/modules/billing/lib/invoices";
 import { IncomingSubscriptionInvoices } from "@/modules/subscriptions/components/IncomingSubscriptionInvoices";
 
-const statusTone = {
-  draft: "neutral",
-  sent: "warning",
-  paid: "success",
-} as const;
-
 export function BillingPage() {
-  const draftCount = invoiceDrafts.filter((invoice) => invoice.status === "draft").length;
-  const sentCount = invoiceDrafts.filter((invoice) => invoice.status === "sent").length;
-  const paidValue = invoiceDrafts
+  const invoices = listInvoices();
+  const draftCount = invoices.filter((invoice) => invoice.status === "draft").length;
+  const sentCount = invoices.filter((invoice) => invoice.status === "sent").length;
+  const latestPaidInvoice = invoices
     .filter((invoice) => invoice.status === "paid")
-    .map((invoice) => invoice.amount)
-    .join(" · ");
+    .sort((a, b) => (b.paidDate ?? "").localeCompare(a.paidDate ?? ""))[0];
 
   return (
     <div className="space-y-8">
@@ -40,7 +33,11 @@ export function BillingPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard label="Utkast" value={String(draftCount)} hint="Redo att kompletteras" />
         <StatCard label="Skickade" value={String(sentCount)} hint="Väntar på betalning" />
-        <StatCard label="Betalt senast" value={paidValue || "0 kr"} hint="Senaste registrerade inflöden" />
+        <StatCard
+          label="Betalt senast"
+          value={latestPaidInvoice ? formatInvoiceAmount(latestPaidInvoice.amountOre, latestPaidInvoice.currency) : "0 kr"}
+          hint="Senaste registrerade inflöden"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -56,22 +53,22 @@ export function BillingPage() {
             </tr>
           </thead>
           <tbody>
-            {invoiceDrafts.map((invoice) => (
+            {invoices.map((invoice) => (
               <tr key={invoice.id} className="transition-colors hover:bg-bg/50">
                 <Td className="font-mono text-xs">
                   <Link href={`/billing/${invoice.id}`} className="hover:text-fg">
                     {invoice.id}
                   </Link>
                 </Td>
-                <Td>{invoice.company}</Td>
-                <Td>{invoice.customer}</Td>
+                <Td>{invoice.companyName}</Td>
+                <Td>{invoice.customerName}</Td>
                 <Td>
-                  <Badge tone={statusTone[invoice.status]}>
-                    {invoice.status === "draft" ? "Utkast" : invoice.status === "sent" ? "Skickad" : "Betald"}
-                  </Badge>
+                  <Badge tone={invoiceStatusTone[invoice.status]}>{invoiceStatusLabel[invoice.status]}</Badge>
                 </Td>
                 <Td className="font-mono text-xs tabular-nums text-muted">{invoice.dueDate}</Td>
-                <Td className="text-right font-medium">{invoice.amount}</Td>
+                <Td className="text-right font-medium">
+                  {formatInvoiceAmount(invoice.amountOre, invoice.currency)}
+                </Td>
               </tr>
             ))}
           </tbody>

@@ -27,18 +27,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Table";
 import { useToast } from "@/components/toast/ToastProvider";
 import { alerts, siteName, type Alert, type AlertKind, type AlertSeverity, type AlertStatus } from "@/modules/jetwp/data";
-
-type AlertComment = {
-  id: string;
-  body: string;
-  author: string;
-  createdAt: string;
-  kind: "resolution";
-};
-
-type AlertItem = Alert & {
-  comments: AlertComment[];
-};
+import { createAlertItems, getAlertCounts, getFilteredAlerts, type AlertItem } from "@/modules/jetwp/selectors/alerts";
 
 const kindIcon: Record<AlertKind, typeof Bell> = {
   missed_heartbeat: HeartPulse,
@@ -66,24 +55,14 @@ export function AlertsPage() {
   const [query, setQuery] = useState("");
   const [sev, setSev] = useState<"all" | AlertSeverity>("all");
   const [status, setStatus] = useState<"all" | AlertStatus>("all");
-  const [items, setItems] = useState<AlertItem[]>(() => alerts.map((alert) => ({ ...alert, comments: [] })));
+  const [items, setItems] = useState<AlertItem[]>(() => createAlertItems(alerts));
   const [resolveTarget, setResolveTarget] = useState<AlertItem | null>(null);
   const [resolveComment, setResolveComment] = useState("");
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return items.filter((alert) => {
-      if (sev !== "all" && alert.severity !== sev) return false;
-      if (status !== "all" && alert.status !== status) return false;
-      if (!normalized) return true;
-      return (
-        alert.title.toLowerCase().includes(normalized) ||
-        alert.description.toLowerCase().includes(normalized) ||
-        alert.comments.some((comment) => comment.body.toLowerCase().includes(normalized)) ||
-        (alert.siteId && siteName(alert.siteId).toLowerCase().includes(normalized))
-      );
-    });
-  }, [items, query, sev, status]);
+  const filtered = useMemo(
+    () => getFilteredAlerts(items, query, sev, status, siteName),
+    [items, query, sev, status],
+  );
 
   const setAlertStatus = (id: string, nextStatus: AlertStatus, label: string) => {
     setItems((current) => current.map((alert) => alert.id === id ? { ...alert, status: nextStatus } : alert));
@@ -119,12 +98,7 @@ export function AlertsPage() {
     setResolveComment("");
   };
 
-  const counts = {
-    open: items.filter((alert) => alert.status === "open").length,
-    critical: items.filter((alert) => alert.severity === "critical" && alert.status === "open").length,
-    warning: items.filter((alert) => alert.severity === "warning" && alert.status === "open").length,
-    resolved: items.filter((alert) => alert.status === "resolved").length,
-  };
+  const counts = useMemo(() => getAlertCounts(items), [items]);
 
   return (
     <div className="space-y-6">
@@ -134,7 +108,7 @@ export function AlertsPage() {
           JetWP
         </Link>
         <div className="mt-3">
-          <PageHeader title="Alerts" subtitle="Händelser från agenter, jobb och monitoring." />
+          <PageHeader title="Larm" subtitle="Händelser från JetWP-agenter, jobb och WordPress-inventering." />
         </div>
       </div>
 
@@ -189,7 +163,7 @@ export function AlertsPage() {
               variant="secondary"
               onClick={() => {
                 setItems((current) => current.map((alert) => alert.status === "open" ? { ...alert, status: "acked" } : alert));
-                toast.success("Alla öppna alerts ackade");
+                toast.success("Alla öppna larm bekräftade");
               }}
             >
               <Bell size={12} className="mr-1" />
@@ -199,15 +173,12 @@ export function AlertsPage() {
               variant="secondary"
               onClick={() => {
                 setItems((current) => current.map((alert) => alert.status !== "resolved" ? { ...alert, status: "resolved" } : alert));
-                toast.success("Alla alerts lösta");
+                toast.success("Alla larm lösta");
               }}
             >
               <CheckCircle2 size={12} className="mr-1" />
               Lös alla
             </Button>
-            <Link href="/jetwp/notifications" className="inline-flex h-9 items-center rounded-lg border bg-surface px-3.5 text-sm font-medium hover:bg-bg">
-              Alert rules
-            </Link>
           </div>
         </div>
       </Card>
@@ -288,7 +259,7 @@ export function AlertsPage() {
           );
         })}
 
-        {filtered.length === 0 && <Card className="p-10 text-center text-sm text-muted">Inga alerts matchade filtret.</Card>}
+        {filtered.length === 0 && <Card className="p-10 text-center text-sm text-muted">Inga larm matchade filtret.</Card>}
       </div>
 
       <Dialog
@@ -297,8 +268,8 @@ export function AlertsPage() {
           setResolveTarget(null);
           setResolveComment("");
         }}
-        title={resolveTarget ? `Lös alert: ${resolveTarget.title}` : "Lös alert"}
-        description="Valfri kommentar som sparas på alerten när den löses."
+        title={resolveTarget ? `Lös larm: ${resolveTarget.title}` : "Lös larm"}
+        description="Valfri kommentar som sparas på larmet när det löses."
         footer={
           <>
             <Button
@@ -312,21 +283,21 @@ export function AlertsPage() {
             </Button>
             <Button onClick={submitResolve}>
               <CheckCircle2 size={13} className="mr-1.5" />
-              Lös alert
+              Lös larm
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           <div className="rounded-xl border bg-bg/40 px-3 py-2.5 text-sm text-muted">
-            Kommentaren är frivillig. Lämna fältet tomt om du bara vill markera alerten som löst.
+            Kommentaren är frivillig. Lämna fältet tomt om du bara vill markera larmet som löst.
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-fg">Kommentar</label>
             <textarea
               value={resolveComment}
               onChange={(event) => setResolveComment(event.target.value)}
-              placeholder="Beskriv vad som gjordes, om någon åtgärd togs eller varför alerten kan stängas."
+              placeholder="Beskriv vad som gjordes, om någon åtgärd togs eller varför larmet kan stängas."
               className="min-h-[140px] w-full rounded-xl border bg-surface px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-muted focus:border-fg/30 focus:ring-2 focus:ring-fg/5"
             />
           </div>

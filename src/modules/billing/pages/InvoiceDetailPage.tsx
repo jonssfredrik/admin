@@ -1,23 +1,19 @@
-"use client";
-
-import { use } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge, Table, Td, Th } from "@/components/ui/Table";
 import { Card } from "@/components/ui/Card";
-import { invoiceDrafts } from "@/modules/billing/data";
+import {
+  formatInvoiceAmount,
+  invoiceCategoryLabel,
+  invoiceStatusLabel,
+  invoiceStatusTone,
+} from "@/modules/billing/lib/format";
+import { getInvoiceById } from "@/modules/billing/lib/invoices";
 
-const statusTone = {
-  draft: "neutral",
-  sent: "warning",
-  paid: "success",
-} as const;
-
-export function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const invoice = invoiceDrafts.find((item) => item.id === id);
+export function InvoiceDetailPage({ id }: { id: string }) {
+  const invoice = getInvoiceById(id);
 
   if (!invoice) notFound();
 
@@ -34,11 +30,9 @@ export function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <PageHeader
           title={invoice.id}
-          subtitle={`Förfallodatum ${invoice.dueDate} · ${invoice.customer}`}
+          subtitle={`Förfallodatum ${invoice.dueDate} · ${invoice.customerName}`}
         />
-        <Badge tone={statusTone[invoice.status]}>
-          {invoice.status === "draft" ? "Utkast" : invoice.status === "sent" ? "Skickad" : "Betald"}
-        </Badge>
+        <Badge tone={invoiceStatusTone[invoice.status]}>{invoiceStatusLabel[invoice.status]}</Badge>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -53,23 +47,31 @@ export function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> 
             <tbody>
               <tr>
                 <Td>Bolag</Td>
-                <Td>{invoice.company}</Td>
+                <Td>{invoice.companyName}</Td>
               </tr>
               <tr>
                 <Td>Kund</Td>
-                <Td>{invoice.customer}</Td>
+                <Td>{invoice.customerName}</Td>
               </tr>
               <tr>
                 <Td>Belopp</Td>
-                <Td>{invoice.amount}</Td>
+                <Td>{formatInvoiceAmount(invoice.amountOre, invoice.currency)}</Td>
               </tr>
               <tr>
                 <Td>Förfallodatum</Td>
                 <Td className="font-mono text-xs">{invoice.dueDate}</Td>
               </tr>
               <tr>
+                <Td>Utfärdad</Td>
+                <Td className="font-mono text-xs">{invoice.issuedDate}</Td>
+              </tr>
+              <tr>
+                <Td>Valuta</Td>
+                <Td>{invoice.currency}</Td>
+              </tr>
+              <tr>
                 <Td>Kategori</Td>
-                <Td className="capitalize">{invoice.category}</Td>
+                <Td>{invoiceCategoryLabel[invoice.category]}</Td>
               </tr>
             </tbody>
           </Table>
@@ -81,8 +83,8 @@ export function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> 
             Kontext
           </div>
           <p className="mt-2 text-sm text-muted">
-            Detaljsidan använder samma mock-data som översikten och fungerar som mållänk för kalenderns
-            aggregerade Billing-händelser.
+            Detaljsidan använder samma billing-källa som översikten och fungerar som mållänk för kalenderns
+            aggregerade billing-händelser.
           </p>
           <div className="mt-4 space-y-3 text-sm">
             <div className="rounded-xl border bg-bg/40 p-3">

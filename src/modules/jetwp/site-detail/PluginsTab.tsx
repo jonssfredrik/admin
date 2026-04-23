@@ -135,7 +135,7 @@ export function PluginsTab({ updatesAvailable }: PluginsTabProps) {
         onClose={() => setUpdateAllOpen(false)}
         onConfirm={updateAll}
         title={`Uppdatera ${updateCount} plugin?`}
-        description="Backup rekommenderas innan uppdateringen körs."
+        description="Kontrollera först Installatron om kunden kräver återställningspunkt före uppdatering."
         confirmLabel="Uppdatera alla"
       />
     </div>
