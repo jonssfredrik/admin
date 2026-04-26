@@ -93,7 +93,7 @@ export function RowMenu({ items }: { items: RowMenuEntry[] }) {
               const Icon = entry.icon;
               return (
                 <button
-                  key={entry.label}
+                  key={`${entry.label}-${index}`}
                   onClick={() => {
                     setOpen(false);
                     entry.onClick();

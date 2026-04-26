@@ -1,68 +1,93 @@
 import { defaultWeightsYaml } from "@/modules/snaptld/data/weights";
-import type { DomainNote, FeedSource, FeedStatus, Report, SnapTldSettings, SnapTldUserState } from "@/modules/snaptld/types";
+import type {
+  DomainNote,
+  FeedSource,
+  FeedStatus,
+  RawDomainAnalysis,
+  RawImportedDomainRecord,
+  Report,
+  SnapTldSettings,
+  SnapTldUserState,
+} from "@/modules/snaptld/types";
 import { createDefaultSettings } from "@/modules/snaptld/server/mappers";
 
-const userState: SnapTldUserState = {
-  watchlist: [],
-  reviewed: [],
-  hidden: [],
-  notes: {},
-  activeWeightsYaml: defaultWeightsYaml,
-  settings: createDefaultSettings(),
-};
+interface PersistedMockState {
+  userState: SnapTldUserState;
+  feedOverrides: Array<[string, { status?: FeedStatus; schedule?: FeedSource["schedule"] }]>;
+  reportOverrides: Report[];
+  importedDomainOverrides: RawImportedDomainRecord[];
+  domainOverrides: RawDomainAnalysis[];
+}
 
+function createInitialState(): PersistedMockState {
+  return {
+    userState: {
+      watchlist: [],
+      reviewed: [],
+      hidden: [],
+      notes: {},
+      activeWeightsYaml: defaultWeightsYaml,
+      settings: createDefaultSettings(),
+    },
+    feedOverrides: [],
+    reportOverrides: [],
+    importedDomainOverrides: [],
+    domainOverrides: [],
+  };
+}
+
+const state = createInitialState();
 const feedOverrides = new Map<string, { status?: FeedStatus; schedule?: FeedSource["schedule"] }>();
-const reportOverrides: Report[] = [];
 
 export function getMockUserState(): SnapTldUserState {
   return {
-    watchlist: [...userState.watchlist],
-    reviewed: [...userState.reviewed],
-    hidden: [...userState.hidden],
-    notes: { ...userState.notes },
-    activeWeightsYaml: userState.activeWeightsYaml,
+    watchlist: [...state.userState.watchlist],
+    reviewed: [...state.userState.reviewed],
+    hidden: [...state.userState.hidden],
+    notes: { ...state.userState.notes },
+    activeWeightsYaml: state.userState.activeWeightsYaml,
     settings: {
-      apiKeys: { ...userState.settings.apiKeys },
-      thresholds: { ...userState.settings.thresholds },
-      notifyEmail: userState.settings.notifyEmail,
-      pushEnabled: userState.settings.pushEnabled,
+      apiKeys: { ...state.userState.settings.apiKeys },
+      thresholds: { ...state.userState.settings.thresholds },
+      notifyEmail: state.userState.settings.notifyEmail,
+      pushEnabled: state.userState.settings.pushEnabled,
     },
   };
 }
 
 export function toggleMockListValue(key: "watchlist" | "reviewed" | "hidden", slug: string) {
-  const set = new Set(userState[key]);
+  const set = new Set(state.userState[key]);
   if (set.has(slug)) set.delete(slug);
   else set.add(slug);
-  userState[key] = [...set];
-  return [...userState[key]];
+  state.userState[key] = [...set];
+  return [...state.userState[key]];
 }
 
 export function addMockListValues(key: "watchlist" | "reviewed" | "hidden", slugs: string[]) {
-  const set = new Set(userState[key]);
+  const set = new Set(state.userState[key]);
   slugs.forEach((slug) => set.add(slug));
-  userState[key] = [...set];
-  return [...userState[key]];
+  state.userState[key] = [...set];
+  return [...state.userState[key]];
 }
 
 export function saveMockNote(slug: string, note: DomainNote | null) {
-  if (note) userState.notes[slug] = note;
-  else delete userState.notes[slug];
-  return { ...userState.notes };
+  if (note) state.userState.notes[slug] = note;
+  else delete state.userState.notes[slug];
+  return { ...state.userState.notes };
 }
 
 export function saveMockWeights(yaml: string) {
-  userState.activeWeightsYaml = yaml;
-  return userState.activeWeightsYaml;
+  state.userState.activeWeightsYaml = yaml;
+  return state.userState.activeWeightsYaml;
 }
 
 export function resetMockWeights() {
-  userState.activeWeightsYaml = defaultWeightsYaml;
-  return userState.activeWeightsYaml;
+  state.userState.activeWeightsYaml = defaultWeightsYaml;
+  return state.userState.activeWeightsYaml;
 }
 
 export function saveMockSettings(settings: SnapTldSettings) {
-  userState.settings = {
+  state.userState.settings = {
     apiKeys: { ...settings.apiKeys },
     thresholds: { ...settings.thresholds },
     notifyEmail: settings.notifyEmail,
@@ -81,9 +106,37 @@ export function saveFeedOverride(feedId: string, next: { status?: FeedStatus; sc
 }
 
 export function appendReport(report: Report) {
-  reportOverrides.unshift(report);
+  state.reportOverrides.unshift(report);
 }
 
 export function getReportOverrides() {
-  return [...reportOverrides];
+  return [...state.reportOverrides];
+}
+
+export function appendImportedDomains(records: RawImportedDomainRecord[]) {
+  state.importedDomainOverrides.unshift(...records);
+}
+
+export function upsertImportedDomain(record: RawImportedDomainRecord) {
+  const next = state.importedDomainOverrides.filter((entry) => entry.slug !== record.slug);
+  next.unshift(record);
+  state.importedDomainOverrides = next;
+}
+
+export function appendDomainAnalyses(records: RawDomainAnalysis[]) {
+  state.domainOverrides.unshift(...records);
+}
+
+export function upsertDomainAnalysis(record: RawDomainAnalysis) {
+  const next = state.domainOverrides.filter((entry) => entry.slug !== record.slug);
+  next.unshift(record);
+  state.domainOverrides = next;
+}
+
+export function getImportedDomainOverrides() {
+  return [...state.importedDomainOverrides];
+}
+
+export function getDomainOverrides() {
+  return [...state.domainOverrides];
 }

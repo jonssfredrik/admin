@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { CalendarClock, CheckCircle2, PauseCircle, RefreshCcw, XCircle } from "lucide-react";
 import clsx from "clsx";
@@ -10,7 +11,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Input, Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
 import { formatDateTime, formatFeedSchedule } from "@/modules/snaptld/lib/format";
-import { updateFeedScheduleAction, toggleFeedStatusAction } from "@/modules/snaptld/actions";
+import { runFeedAction, updateFeedScheduleAction, toggleFeedStatusAction } from "@/modules/snaptld/actions";
 import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
 import type { FeedSource } from "@/modules/snaptld/types";
 
@@ -31,6 +32,7 @@ export function FeedCard({ feed: initialFeed }: { feed: FeedSource }) {
   const toast = useToast();
   const scheduleAction = useAsyncAction();
   const toggleAction = useAsyncAction();
+  const runAction = useAsyncAction();
   const [feed, setFeed] = useState(initialFeed);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [schedule, setSchedule] = useState(feed.schedule);
@@ -65,13 +67,30 @@ export function FeedCard({ feed: initialFeed }: { feed: FeedSource }) {
     }
   };
 
+  const runFeed = async () => {
+    try {
+      const result = await runAction.run(() => runFeedAction(feed.id));
+      toast.success(
+        "Feed hämtad",
+        `${result.imported} importerade · ${result.duplicates} dubletter`,
+      );
+    } catch (error) {
+      toast.error("Kunde inte hämta feed", error instanceof Error ? error.message : feed.name);
+    }
+  };
+
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Icon size={14} className={clsx("shrink-0", status.color)} />
-            <h3 className="truncate text-sm font-semibold">{feed.name}</h3>
+            <Link
+              href={`/snaptld/sources/${feed.id}`}
+              className="truncate text-sm font-semibold hover:underline"
+            >
+              {feed.name}
+            </Link>
           </div>
           <p className="mt-1 break-all text-[11px] font-mono text-muted">{feed.url}</p>
         </div>
@@ -95,10 +114,11 @@ export function FeedCard({ feed: initialFeed }: { feed: FeedSource }) {
         <Button
           variant="secondary"
           className="flex-1 gap-1.5"
-          onClick={() => toast.info("Hämtar feed", `${feed.name} kö-lagd för nästa analys`)}
+          onClick={runFeed}
+          disabled={feed.status !== "active" || runAction.isPending}
         >
           <RefreshCcw size={14} />
-          Hämta nu
+          {runAction.isPending ? "Hämtar..." : "Hämta nu"}
         </Button>
         <Button
           variant="ghost"

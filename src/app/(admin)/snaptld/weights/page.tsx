@@ -1,6 +1,8 @@
 import { WeightsPage } from "@/modules/snaptld/pages/WeightsPage";
 import { getInitialSnapTldUserState, getSnapTldRepository } from "@/modules/snaptld/server/repository";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const repository = getSnapTldRepository();
   const [domains, initialUserState] = await Promise.all([

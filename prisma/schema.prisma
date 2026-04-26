@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model SnapTldState {
+  id                String   @id
+  watchlistJson     String
+  reviewedJson      String
+  hiddenJson        String
+  notesJson         String
+  activeWeightsYaml String
+  settingsJson      String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SnapTldFeedOverride {
+  feedId       String   @id
+  status       String?
+  scheduleJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SnapTldReport {
+  id          String   @id
+  title       String
+  generatedAt DateTime
+  domains     Int
+  highlight   String
+  format      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SnapTldImportedDomain {
+  slug                   String   @id
+  domain                 String
+  tld                    String
+  source                 String
+  sourceLabel            String
+  importedAt             DateTime
+  importedBy             String
+  batchId                String
+  status                 String
+  expiresAt              String
+  totalScore             Int
+  verdict                String
+  estimatedValueMin      Int
+  estimatedValueMax      Int
+  estimatedValueCurrency String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([source])
+}
+
+model SnapTldDomainAnalysis {
+  slug                   String   @id
+  domain                 String
+  tld                    String
+  source                 String
+  fetchedAt              DateTime
+  expiresAt              String
+  totalScore             Int
+  verdict                String
+  status                 String
+  aiSummary              String
+  estimatedValueMin      Int
+  estimatedValueMax      Int
+  estimatedValueCurrency String
+  categoriesJson         String
+  seoJson                String
+  waybackJson            String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([source])
+}
+
+model DriveItem {
+  id              String          @id
+  name            String
+  kind            String
+  mimeType        String?
+  extension       String?
+  sizeBytes       Int             @default(0)
+  parentId        String?
+  parent          DriveItem?      @relation("DriveFolderChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children        DriveItem[]     @relation("DriveFolderChildren")
+  pathJson        String
+  ownerId         String
+  ownerName       String
+  ownerInitials   String
+  isFavorite      Boolean         @default(false)
+  isDeleted       Boolean         @default(false)
+  storageKey      String?
+  previewType     String
+  previewUrl      String?
+  previewContent  String?
+  previewLanguage String?
+  previewAccent   String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  activities      DriveActivity[]
+
+  @@index([parentId])
+  @@index([kind])
+  @@index([isDeleted])
+}
+
+model DriveActivity {
+  id        String    @id
+  itemId    String
+  item      DriveItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  actor     String
+  action    String
+  createdAt DateTime  @default(now())
+
+  @@index([itemId])
+}

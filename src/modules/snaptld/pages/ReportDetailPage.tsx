@@ -44,7 +44,7 @@ export function ReportDetailPage({ report }: { report: Report }) {
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           title={report.title}
-          subtitle="Enkel rapportsida med grunddata. Byggs ut vidare i nästa steg."
+          subtitle="Rapport med sammanfattning, export och utskriftsvy."
         />
         <div className="flex gap-2">
           <Button variant="secondary" className="gap-1.5" onClick={download}>
@@ -90,7 +90,7 @@ export function ReportDetailPage({ report }: { report: Report }) {
         </div>
         <div className="rounded-xl border bg-bg/40 p-4">
           <div className="text-xs font-medium uppercase tracking-wider text-muted">Status</div>
-          <div className="mt-1 text-sm text-muted">Arkiverad mockrapport. Ingen liveuppdatering ännu.</div>
+          <div className="mt-1 text-sm text-muted">Arkiverad rapport. Export och utskrift finns tillgängligt.</div>
         </div>
       </Card>
     </div>

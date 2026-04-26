@@ -1,0 +1,87 @@
+import type { Invoice } from "@/modules/billing/types";
+
+export const defaultInvoices: Invoice[] = [
+  {
+    id: "co-nordic-ops-inv-1",
+    companyId: "co-nordic-ops",
+    customerId: "cust-arctic-outdoor",
+    customer: {
+      name: "Arctic Outdoor Co.",
+      orgNumber: "556789-1234",
+      email: "ekonomi@arcticoutdoor.se",
+      address: "Storgatan 18",
+      postalCode: "903 26",
+      city: "Umeå",
+    },
+    status: "draft",
+    lines: [
+      {
+        id: "line-041-1",
+        description: "Hosting Q2 2026 — premium-plan",
+        quantity: 1,
+        unitPriceOre: 1480000,
+      },
+    ],
+    vatRate: 0.25,
+    currency: "SEK",
+    paymentTermsDays: 30,
+    dueDate: "2026-04-30",
+    issuedDate: "2026-04-16",
+  },
+  {
+    id: "co-studio-fredrik-inv-0",
+    companyId: "co-studio-fredrik",
+    customerId: "cust-lagom-interior",
+    customer: {
+      name: "Lagom Interiör",
+      orgNumber: "556321-7890",
+      email: "faktura@lagominterior.se",
+      address: "Drottninggatan 55",
+      postalCode: "411 14",
+      city: "Göteborg",
+    },
+    status: "sent",
+    lines: [
+      {
+        id: "line-038-1",
+        description: "Konsultarbete — uppdatering produktsidor",
+        quantity: 8,
+        unit: "tim",
+        unitPriceOre: 72000,
+      },
+    ],
+    vatRate: 0.25,
+    currency: "SEK",
+    paymentTermsDays: 30,
+    dueDate: "2026-04-24",
+    issuedDate: "2026-04-10",
+  },
+  {
+    id: "co-nordic-ops-inv-0",
+    companyId: "co-nordic-ops",
+    customerId: "cust-saas-atlas",
+    customer: {
+      name: "SaaS Atlas",
+      orgNumber: "559876-5432",
+      email: "billing@saasatlas.io",
+      address: "Östermalmstorg 1",
+      postalCode: "114 39",
+      city: "Stockholm",
+    },
+    status: "paid",
+    lines: [
+      {
+        id: "line-031-1",
+        description: "Månadsabonnemang Q1 2026",
+        quantity: 1,
+        unitPriceOre: 272000,
+      },
+    ],
+    vatRate: 0.25,
+    currency: "SEK",
+    paymentTermsDays: 30,
+    dueDate: "2026-04-12",
+    issuedDate: "2026-03-29",
+    paidDate: "2026-04-11",
+  },
+];

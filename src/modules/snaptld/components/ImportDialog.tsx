@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Briefcase,
   Check,
   Copy,
   Download,
@@ -10,8 +11,10 @@ import {
   History,
   LayoutDashboard,
   Link as LinkIcon,
+  ListChecks,
   SearchCheck,
   ShieldAlert,
+  ShoppingCart,
   Sparkles,
   TrendingUp,
   Type,
@@ -24,6 +27,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
 import { importDomainsAction } from "@/modules/snaptld/actions";
+import { internetstiftelsenFeeds } from "@/modules/snaptld/data/feeds";
 import { useAsyncAction } from "@/modules/snaptld/lib/useAsyncAction";
 import type { ImportDomainsInput } from "@/modules/snaptld/types";
 
@@ -31,7 +35,7 @@ type Mode = ImportDomainsInput["mode"];
 type AnalysisStep = ImportDomainsInput["selectedSteps"][number];
 
 const modes: { id: Mode; label: string; icon: typeof LinkIcon; hint: string }[] = [
-  { id: "url", label: "URL", icon: LinkIcon, hint: "JSON/CSV-feed" },
+  { id: "url", label: "URL", icon: LinkIcon, hint: "Internetstiftelsen eller egen feed" },
   { id: "text", label: "Fritext", icon: Type, hint: "En domän per rad" },
   { id: "csv", label: "CSV", icon: FileText, hint: "domain,expires" },
   { id: "json", label: "JSON", icon: FileText, hint: "Array av domäner" },
@@ -44,8 +48,12 @@ const analysisSteps: {
   icon: typeof LayoutDashboard;
 }[] = [
   { id: "overview", label: "Översikt", hint: "Sammanfattning och total score", icon: LayoutDashboard },
+  { id: "structure", label: "Struktur", hint: "Längd, tecken och stavning", icon: ListChecks },
+  { id: "lexical", label: "Lexikal", hint: "Ord, begriplighet och språkkänsla", icon: Type },
   { id: "brand", label: "Varumärke", hint: "Brandbarhet och namnkänsla", icon: Sparkles },
+  { id: "market", label: "Marknad", hint: "Målgrupp och kommersiell intent", icon: Briefcase },
   { id: "risk", label: "Risk", hint: "Juridik och varningssignaler", icon: ShieldAlert },
+  { id: "salability", label: "Säljbarhet", hint: "Köpare, likviditet och flip-potential", icon: ShoppingCart },
   { id: "seo", label: "SEO", hint: "Moz-data och länksignaler", icon: TrendingUp },
   { id: "history", label: "Historik", hint: "Wayback och tidigare innehåll", icon: History },
 ];
@@ -152,7 +160,6 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
-  const [priority, setPriority] = useState(false);
   const [selectedSteps, setSelectedSteps] = useState<AnalysisStep[]>([]);
 
   const result = useMemo(
@@ -179,7 +186,6 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
     setText("");
     setFileName(null);
     setFileContent(null);
-    setPriority(false);
     setSelectedSteps([]);
     importAction.reset();
   };
@@ -203,14 +209,13 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
           url: mode === "url" ? url.trim() : undefined,
           validDomains: result.valid,
           duplicates: result.duplicates,
-          priority,
           selectedSteps,
         }),
       );
 
       if (shouldAnalyze) {
         toast.success(
-          priority ? "Prioriterad analys startad" : "Analys startad",
+          "Analys startad",
           `${response.imported} importerade · ${selectedSteps.length} steg valda`,
         );
       } else {
@@ -232,21 +237,6 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
       size="lg"
       footer={
         <>
-          <label
-            className={clsx(
-              "mr-auto flex cursor-pointer items-center gap-2 text-xs",
-              shouldAnalyze ? "text-muted" : "cursor-not-allowed text-muted/60",
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={priority}
-              disabled={!shouldAnalyze || importAction.isPending}
-              onChange={(event) => setPriority(event.target.checked)}
-              className="h-3.5 w-3.5 accent-fg"
-            />
-            Kör före andra kö-jobb
-          </label>
           <Button variant="secondary" onClick={closeDialog} disabled={importAction.isPending}>
             Avbryt
           </Button>
@@ -286,13 +276,26 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
             <Label htmlFor="url-input">Feed-URL</Label>
             <Input
               id="url-input"
-              placeholder="https://data.internetstiftelsen.se/expired/daily.json"
+              placeholder="https://data.internetstiftelsen.se/bardate_domains.json"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               disabled={importAction.isPending}
             />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {internetstiftelsenFeeds.map((feed) => (
+                <button
+                  key={feed.url}
+                  type="button"
+                  onClick={() => setUrl(feed.url)}
+                  disabled={importAction.isPending}
+                  className="rounded-full border px-2.5 py-1 text-xs text-muted transition-colors hover:border-fg/30 hover:text-fg disabled:opacity-60"
+                >
+                  {feed.label}
+                </button>
+              ))}
+            </div>
             <div className="mt-1.5 text-xs text-muted">
-              Feeden kontrolleras vid nästa körning. Stöds för JSON och CSV.
+              Feeden kontrolleras vid nästa körning. Stöd finns för JSON och CSV.
             </div>
           </div>
         )}
@@ -305,7 +308,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
               onChange={(event) => setText(event.target.value)}
               rows={7}
               disabled={importAction.isPending}
-              placeholder={`exempel.se\nannan-domän.nu\nbrand.io`}
+              placeholder={`exempel.se\nannan-doman.nu\nbrand.io`}
               className="w-full rounded-lg border bg-surface px-3 py-2 font-mono text-sm outline-none transition-colors placeholder:text-muted focus:border-fg/30 focus:ring-2 focus:ring-fg/5 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
@@ -466,3 +469,4 @@ function ImportPreview({ result }: { result: ParseResult }) {
     </div>
   );
 }
+

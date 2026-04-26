@@ -6,3 +6,21 @@ dist
 !.env.example
 .DS_Store
 *.log
+
+# Runtime data and local storage
+.data/
+uploads/
+storage/
+
+# Local databases and database sidecar files
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+
+# Local generated/test artifacts
+screenshots/
+test-results/
+playwright-report/

@@ -15,12 +15,10 @@ import {
 } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import {
-  formatInvoiceAmount,
-  invoiceCategoryLabel,
-  invoiceStatusLabel,
-} from "@/modules/billing/lib/format";
-import { getInvoiceById } from "@/modules/billing/lib/invoices";
+import { formatInvoiceAmount, invoiceDisplayStatus } from "@/modules/billing/lib/format";
+import { invoiceTotals } from "@/modules/billing/lib/totals";
+import { useCompanies } from "@/modules/billing/lib/useCompanies";
+import { useInvoices } from "@/modules/billing/lib/useInvoices";
 import {
   categoryMeta,
   daysUntil,
@@ -81,6 +79,8 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props) {
   const { items: subscriptions } = useSubscriptions();
+  const { items: invoices } = useInvoices();
+  const { items: companies } = useCompanies();
 
   if (!open || !event) return null;
 
@@ -93,8 +93,9 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
       : null;
   const invoice =
     event.source === "billing" && event.sourceRef
-      ? getInvoiceById(event.sourceRef) ?? null
+      ? invoices.find((inv) => inv.id === event.sourceRef) ?? null
       : null;
+  const invoiceCompany = invoice ? companies.find((c) => c.id === invoice.companyId) : undefined;
   const domain =
     event.source === "snaptld" && event.sourceRef
       ? domainAnalyses.find((item) => item.slug === event.sourceRef) ?? null
@@ -221,11 +222,10 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
                 <InfoGrid
                   items={[
                     { label: "Faktura", value: invoice.id },
-                    { label: "Bolag", value: invoice.companyName },
-                    { label: "Kund", value: invoice.customerName },
-                    { label: "Belopp", value: formatInvoiceAmount(invoice.amountOre, invoice.currency) },
-                    { label: "Status", value: invoiceStatusLabel[invoice.status] },
-                    { label: "Kategori", value: invoiceCategoryLabel[invoice.category] },
+                    { label: "Bolag", value: invoiceCompany?.name ?? "—" },
+                    { label: "Kund", value: invoice.customer.name },
+                    { label: "Belopp", value: formatInvoiceAmount(invoiceTotals(invoice).totalOre, invoice.currency) },
+                    { label: "Status", value: invoiceDisplayStatus(invoice).label },
                   ]}
                 />
               </div>

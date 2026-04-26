@@ -15,6 +15,7 @@ export const jetwpModule: AdminModuleDefinition = {
     { href: "/jetwp/workflow", label: "Arbetsflöden" },
     { href: "/jetwp/inventory", label: "Inventering" },
     { href: "/jetwp/alerts", label: "Larm" },
+    { href: "/jetwp/notifications", label: "Notifikationer" },
     { href: "/jetwp/reports", label: "Rapporter" },
     { href: "/jetwp/agents", label: "Agenter" },
     { href: "/jetwp/onboarding", label: "Onboarding" },

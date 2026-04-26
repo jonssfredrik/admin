@@ -7,6 +7,8 @@ interface Props {
 
 export function BarChart({ data, height = 180 }: Props) {
   const max = Math.max(...data.map((d) => d.value));
+  if (data.length === 0 || max <= 0) return null;
+
   return (
     <div className="flex items-end gap-2" style={{ height }}>
       {data.map((d, i) => {

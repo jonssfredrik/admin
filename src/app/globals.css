@@ -61,3 +61,17 @@ html, body {
 *::-webkit-scrollbar-corner {
   background: rgb(var(--scrollbar-track));
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+  html, body {
+    background: white !important;
+    color: black !important;
+  }
+  .print-hide {
+    display: none !important;
+  }
+}

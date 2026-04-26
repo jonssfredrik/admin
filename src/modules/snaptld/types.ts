@@ -88,6 +88,7 @@ export interface ImportedDomainRecord extends DomainRecord {
   totalScore: number;
   verdict: Verdict;
   estimatedValue: MoneyValueRange;
+  analysisSteps?: AnalysisCategory[];
 }
 
 export interface FeedSchedule {
@@ -219,8 +220,7 @@ export interface ImportDomainsInput {
   url?: string;
   validDomains: string[];
   duplicates: string[];
-  priority: boolean;
-  selectedSteps: Array<"overview" | "brand" | "risk" | "seo" | "history">;
+  selectedSteps: Array<"overview" | AnalysisCategory>;
 }
 
 export interface CreateReportInput {
@@ -229,4 +229,56 @@ export interface CreateReportInput {
   cadence: string;
   format: ReportFormat;
   recipients: string;
+}
+
+export interface RunFeedsResult {
+  feeds: number;
+  imported: number;
+  duplicates: number;
+}
+
+export interface AnalyzeQueueInput {
+  limit?: number | "all";
+  steps: Array<"overview" | AnalysisCategory>;
+  scope: "queued" | "not-analyzed" | "all" | "missing-step" | "selected";
+  slugs?: string[];
+  dateFilter?: {
+    direction: "before" | "after";
+    date: string;
+  } | null;
+  missingStep?: AnalysisCategory | null;
+  sortBy?: "oldest-imported" | "newest-imported" | "expires-soon" | "highest-score" | "lowest-score" | "domain";
+}
+
+export interface AnalyzeQueueResult {
+  analyzed: number;
+  remaining: number;
+  failed: number;
+}
+
+export interface AnalysisRunResult {
+  analyzed: boolean;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface QueuePageMeta {
+  totalDomains: number;
+  uniqueTlds: string[];
+}
+
+export interface ImportedDomainsMeta {
+  totalDomains: number;
+  importedToday: number;
+  analyzed: number;
+  running: number;
+  uniqueBatches: number;
+  uniqueTlds: string[];
+  uniqueSources: Array<{ id: DomainSource; label: string }>;
 }

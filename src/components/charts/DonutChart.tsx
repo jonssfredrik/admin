@@ -8,6 +8,8 @@ interface Slice {
 
 export function DonutChart({ data, size = 160 }: { data: Slice[]; size?: number }) {
   const total = data.reduce((s, d) => s + d.value, 0);
+  if (total <= 0) return null;
+
   const r = size / 2 - 12;
   const c = 2 * Math.PI * r;
   let offset = 0;

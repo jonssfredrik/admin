@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import DomainDetailPage from "@/modules/snaptld/domain-detail/DomainDetailPage";
 import { getInitialSnapTldUserState, getSnapTldRepository } from "@/modules/snaptld/server/repository";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page({ params }: { params: Promise<{ domain: string }> }) {
   const { domain: slug } = await params;
   const repository = getSnapTldRepository();

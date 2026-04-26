@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { ArrowDown, ArrowUp, Database, Download, RefreshCcw, Search, Upload, X } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -19,8 +20,9 @@ import { VerdictBadge } from "@/modules/snaptld/components/VerdictBadge";
 import { WatchButton } from "@/modules/snaptld/components/WatchButton";
 import { SnapTldUserStateProvider } from "@/modules/snaptld/client/SnapTldUserStateProvider";
 import { formatDateTime, formatMoneyRange } from "@/modules/snaptld/lib/format";
-import { getImportedRows, getImportedStats, getImportedUniqueSources, getImportedUniqueTlds, type ImportedSortDir, type ImportedSortKey } from "@/modules/snaptld/selectors/imports";
-import type { ImportedDomainRecord, SnapTldUserState } from "@/modules/snaptld/types";
+import { rerunAnalysisAction } from "@/modules/snaptld/actions";
+import type { ImportedSortDir, ImportedSortKey } from "@/modules/snaptld/selectors/imports";
+import type { AnalysisCategory, ImportedDomainRecord, ImportedDomainsMeta, PaginatedResult, SnapTldUserState } from "@/modules/snaptld/types";
 
 const statusMeta = {
   analyzed: { label: "Analyserad", tone: "success" },
@@ -43,6 +45,19 @@ const statusFilters = [
   { id: "queued", label: "Köade" },
   { id: "failed", label: "Misslyckade" },
 ] as const;
+
+const PAGE_SIZE = 100;
+
+const analysisStepMeta: Array<{ id: AnalysisCategory; label: string; short: string }> = [
+  { id: "structure", label: "Struktur", short: "St" },
+  { id: "lexical", label: "Lexikal", short: "Le" },
+  { id: "brand", label: "Varumärke", short: "Br" },
+  { id: "market", label: "Marknad", short: "Ma" },
+  { id: "risk", label: "Risk", short: "Ri" },
+  { id: "salability", label: "Säljbarhet", short: "Sä" },
+  { id: "seo", label: "SEO", short: "Se" },
+  { id: "history", label: "Historik", short: "Hi" },
+];
 
 function exportCsv(rows: ImportedDomainRecord[]) {
   const csv = [
@@ -75,7 +90,7 @@ export function ImportedDomainsPage({
   domains,
   initialUserState,
 }: {
-  domains: ImportedDomainRecord[];
+  domains: PaginatedResult<ImportedDomainRecord> & { meta: ImportedDomainsMeta };
   initialUserState: SnapTldUserState;
 }) {
   return (
@@ -85,41 +100,52 @@ export function ImportedDomainsPage({
   );
 }
 
-function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord[] }) {
+function ImportedDomainsPageContent({ domains }: { domains: PaginatedResult<ImportedDomainRecord> & { meta: ImportedDomainsMeta } }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [importOpen, setImportOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<(typeof statusFilters)[number]["id"]>("all");
-  const [source, setSource] = useState<"all" | ImportedDomainRecord["source"]>("all");
-  const [tld, setTld] = useState<"all" | string>("all");
-  const [sortKey, setSortKey] = useState<ImportedSortKey>("importedAt");
-  const [sortDir, setSortDir] = useState<ImportedSortDir>("desc");
+  const queryParam = searchParams.get("q") ?? "";
+  const status = (searchParams.get("status") as (typeof statusFilters)[number]["id"] | null) ?? "all";
+  const source = (searchParams.get("source") as "all" | ImportedDomainRecord["source"] | null) ?? "all";
+  const tld = searchParams.get("tld") ?? "all";
+  const sortKey = (searchParams.get("sort") as ImportedSortKey | null) ?? "importedAt";
+  const sortDir = (searchParams.get("dir") as ImportedSortDir | null) ?? "desc";
+  const [query, setQuery] = useState(queryParam);
 
-  const uniqueTlds = useMemo(() => getImportedUniqueTlds(domains), [domains]);
-  const uniqueSources = useMemo(() => getImportedUniqueSources(domains), [domains]);
-  const stats = useMemo(() => getImportedStats(domains), [domains]);
-  const filtered = useMemo(
-    () => getImportedRows(domains, { query, status, source, tld }, sortKey, sortDir),
-    [domains, query, status, source, tld, sortKey, sortDir],
-  );
+  const uniqueTlds = domains.meta.uniqueTlds;
+  const uniqueSources = domains.meta.uniqueSources;
+  const stats = domains.meta;
+  const paginated = domains.items;
+  const page = domains.page;
+  const totalPages = domains.totalPages;
+
+  const updateParams = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!value || value === "all" || (key === "page" && value === "1")) next.delete(key);
+      else next.set(key, value);
+    });
+    router.push(`/snaptld/domains${next.toString() ? `?${next.toString()}` : ""}`);
+  };
 
   const activeFilters =
-    (query ? 1 : 0) + (status !== "all" ? 1 : 0) + (source !== "all" ? 1 : 0) + (tld !== "all" ? 1 : 0);
+    (queryParam ? 1 : 0) + (status !== "all" ? 1 : 0) + (source !== "all" ? 1 : 0) + (tld !== "all" ? 1 : 0);
 
   const resetFilters = () => {
     setQuery("");
-    setStatus("all");
-    setSource("all");
-    setTld("all");
+    updateParams({ q: null, status: null, source: null, tld: null, page: null });
   };
 
   const toggleSort = (key: ImportedSortKey) => {
-    if (sortKey === key) {
-      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setSortKey(key);
-    setSortDir(key === "domain" ? "asc" : "desc");
+    const nextDir = sortKey === key ? (sortDir === "asc" ? "desc" : "asc") : key === "domain" ? "asc" : "desc";
+    updateParams({ sort: key, dir: nextDir, page: "1" });
+  };
+
+  const rerunAnalysis = async (domain: ImportedDomainRecord) => {
+    await rerunAnalysisAction(domain.slug);
+    toast.success("Analys körd", domain.domain);
+    router.refresh();
   };
 
   return (
@@ -127,15 +153,15 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           title="Databas"
-          subtitle="Alla importerade domäner i SnapTLD. Visar hela den mockade databasen, oavsett analysstatus."
+          subtitle="Alla importerade domäner i SnapTLD. Filtrera, sortera och följ analysstatus."
         />
         <div className="flex gap-2">
           <Button
             variant="secondary"
             className="gap-1.5"
             onClick={() => {
-              exportCsv(filtered);
-              toast.success("Databas exporterad", `${filtered.length} domäner i CSV`);
+              exportCsv(paginated);
+              toast.success("Aktuell sida exporterad", `${paginated.length} domäner i CSV`);
             }}
           >
             <Download size={14} />
@@ -149,7 +175,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Domäner i databasen" value={String(domains.length)} hint="Mockad totalvolym" />
+        <StatCard label="Domäner i databasen" value={String(stats.totalDomains)} hint="Totalvolym" />
         <StatCard label="Importerade idag" value={String(stats.importedToday)} delta={9} hint="Senaste batchkörningen" />
         <StatCard label="Analyserade" value={String(stats.analyzed)} hint={`${stats.running} körs just nu`} />
         <StatCard label="Importbatcher" value={String(stats.uniqueBatches)} hint="Över alla källor" />
@@ -163,26 +189,33 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
           </div>
           <div className="inline-flex items-center gap-1.5 text-xs text-muted">
             <Database size={13} />
-            {filtered.length} visade
+            {domains.total} totalt
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[240px] flex-1 max-w-sm">
+          <form
+            className="relative min-w-[240px] flex-1 max-w-sm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateParams({ q: query.trim(), page: "1" });
+            }}
+          >
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
               className="pl-9"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onBlur={() => updateParams({ q: query.trim(), page: "1" })}
               placeholder="Sök domän, batch eller importör..."
             />
-          </div>
+          </form>
 
           <div className="flex gap-1 rounded-lg border bg-surface p-1">
             {statusFilters.map((filter) => (
               <button
                 key={filter.id}
-                onClick={() => setStatus(filter.id)}
+                onClick={() => updateParams({ status: filter.id, page: "1" })}
                 className={clsx(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                   status === filter.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
@@ -195,7 +228,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
 
           <div className="flex gap-1 rounded-lg border bg-surface p-1">
             <button
-              onClick={() => setSource("all")}
+              onClick={() => updateParams({ source: "all", page: "1" })}
               className={clsx(
                 "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                 source === "all" ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
@@ -206,7 +239,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
             {uniqueSources.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setSource(item.id)}
+                onClick={() => updateParams({ source: item.id, page: "1" })}
                 className={clsx(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                   source === item.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
@@ -219,7 +252,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
 
           <div className="flex gap-1 rounded-lg border bg-surface p-1">
             <button
-              onClick={() => setTld("all")}
+              onClick={() => updateParams({ tld: "all", page: "1" })}
               className={clsx(
                 "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                 tld === "all" ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
@@ -230,7 +263,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
             {uniqueTlds.map((value) => (
               <button
                 key={value}
-                onClick={() => setTld(value)}
+                onClick={() => updateParams({ tld: value, page: "1" })}
                 className={clsx(
                   "rounded-md px-2 py-1 font-mono text-xs font-medium transition-colors",
                   tld === value ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
@@ -259,8 +292,12 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
               <SortableTh active={sortKey === "domain"} dir={sortDir} onClick={() => toggleSort("domain")}>
                 Domän
               </SortableTh>
-              <Th>Status</Th>
-              <Th>Källa</Th>
+              <SortableTh active={sortKey === "status"} dir={sortDir} onClick={() => toggleSort("status")}>
+                Status
+              </SortableTh>
+              <SortableTh active={sortKey === "source"} dir={sortDir} onClick={() => toggleSort("source")}>
+                Källa
+              </SortableTh>
               <SortableTh active={sortKey === "importedAt"} dir={sortDir} onClick={() => toggleSort("importedAt")}>
                 Importerad
               </SortableTh>
@@ -270,19 +307,21 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
               <SortableTh className="w-52" active={sortKey === "score"} dir={sortDir} onClick={() => toggleSort("score")}>
                 Score
               </SortableTh>
-              <Th>Utlåtande</Th>
+              <SortableTh active={sortKey === "verdict"} dir={sortDir} onClick={() => toggleSort("verdict")}>
+                Utlåtande
+              </SortableTh>
               <Th className="w-10" />
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
+            {domains.total === 0 && (
               <tr>
                 <Td colSpan={9} className="py-10 text-center text-sm text-muted">
                   Inga importerade domäner matchar filtren.
                 </Td>
               </tr>
             )}
-            {filtered.map((domain) => (
+            {paginated.map((domain) => (
               <tr key={domain.slug} className="transition-colors hover:bg-bg/50">
                 <Td className="pr-0">
                   <WatchButton slug={domain.slug} domain={domain.domain} variant="icon" />
@@ -311,7 +350,10 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
                   <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
                 </Td>
                 <Td>
-                  <ScoreBar score={domain.totalScore} showValue />
+                  <div className="space-y-1.5">
+                    <ScoreBar score={domain.totalScore} showValue />
+                    <AnalysisStepIndicator steps={domain.analysisSteps ?? []} />
+                  </div>
                 </Td>
                 <Td>
                   <VerdictBadge verdict={domain.verdict} />
@@ -323,7 +365,7 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
                       {
                         label: "Kör om analys",
                         icon: RefreshCcw,
-                        onClick: () => toast.info("Analys kölagd", domain.domain),
+                        onClick: () => void rerunAnalysis(domain),
                       },
                       {
                         label: "Exportera rad",
@@ -340,6 +382,26 @@ function ImportedDomainsPageContent({ domains }: { domains: ImportedDomainRecord
             ))}
           </tbody>
         </Table>
+
+        {domains.total > 0 && (
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            <span className="text-sm text-muted">
+              Sida {page} av {totalPages} · visar {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, domains.total)} av {domains.total}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => updateParams({ page: String(page - 1) })} disabled={page === 1}>
+                Föregående
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => updateParams({ page: String(page + 1) })}
+                disabled={page === totalPages}
+              >
+                Nästa
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
@@ -373,5 +435,32 @@ function SortableTh({
         {active ? dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} /> : <span className="inline-block h-[10px] w-[10px]" />}
       </button>
     </Th>
+  );
+}
+
+function AnalysisStepIndicator({ steps }: { steps: AnalysisCategory[] }) {
+  const completed = new Set(steps);
+  const label = steps.length > 0
+    ? `Analyserad: ${analysisStepMeta.filter((step) => completed.has(step.id)).map((step) => step.label).join(", ")}`
+    : "Ej analyserad";
+
+  return (
+    <div className="flex items-center gap-1" title={label} aria-label={label}>
+      {analysisStepMeta.map((step) => {
+        const active = completed.has(step.id);
+        return (
+          <span
+            key={step.id}
+            className={clsx(
+              "h-1.5 w-3 rounded-full transition-colors",
+              active ? "bg-fg/70" : "bg-fg/10",
+            )}
+          />
+        );
+      })}
+      <span className="ml-1 text-[10px] font-medium tabular-nums text-muted">
+        {steps.length}/8
+      </span>
+    </div>
   );
 }

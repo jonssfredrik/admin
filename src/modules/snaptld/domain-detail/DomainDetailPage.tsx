@@ -111,10 +111,11 @@ function DomainDetailPageContent({
     if (rerunAction.isPending) return;
 
     setRunningStep(step);
-    toast.info("Analyssteg kölagt", `${stepLabels[step]} för ${domain.domain}`);
+    toast.info("Analyssteg körs", `${stepLabels[step]} för ${domain.domain}`);
 
     try {
       await rerunAction.run(() => rerunAnalysisAction(domain.slug, step));
+      router.refresh();
       toast.success("Analyssteg klart", `${stepLabels[step]} uppdaterad för ${domain.domain}`);
     } catch {
       toast.error("Analyssteg misslyckades", `${stepLabels[step]} kunde inte köras för ${domain.domain}`);

@@ -14,9 +14,10 @@ export const snaptldModule: AdminModuleDefinition = {
     { href: "/snaptld", label: "Översikt" },
     { href: "/snaptld/queue", label: "Analyskö", matchPaths: ["/snaptld/[domain]"] },
     { href: "/snaptld/domains", label: "Databas" },
-    { href: "/snaptld/sources", label: "Källor" },
+    { href: "/snaptld/sources", label: "Källor", matchPaths: ["/snaptld/sources/[feedId]"] },
     { href: "/snaptld/reports", label: "Rapporter" },
     { href: "/snaptld/weights", label: "Vikter" },
+    { href: "/snaptld/sqlite", label: "SQLite" },
     { href: "/snaptld/settings", label: "Inställningar" },
   ],
   metrics: [

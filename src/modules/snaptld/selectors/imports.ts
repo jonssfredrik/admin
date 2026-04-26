@@ -1,6 +1,6 @@
 import type { ImportedDomainRecord } from "@/modules/snaptld/types";
 
-export type ImportedSortKey = "domain" | "importedAt" | "expiresAt" | "score";
+export type ImportedSortKey = "domain" | "status" | "source" | "importedAt" | "expiresAt" | "score" | "verdict";
 export type ImportedSortDir = "asc" | "desc";
 
 export interface ImportedFilters {
@@ -58,10 +58,16 @@ export function getImportedRows(
       switch (sortKey) {
         case "domain":
           return a.domain.localeCompare(b.domain) * dir;
+        case "status":
+          return a.status.localeCompare(b.status) * dir;
+        case "source":
+          return a.sourceLabel.localeCompare(b.sourceLabel) * dir;
         case "expiresAt":
           return a.expiresAt.localeCompare(b.expiresAt) * dir;
         case "score":
           return (a.totalScore - b.totalScore) * dir;
+        case "verdict":
+          return a.verdict.localeCompare(b.verdict) * dir;
         case "importedAt":
         default:
           return a.importedAt.localeCompare(b.importedAt) * dir;

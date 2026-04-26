@@ -1,7 +1,7 @@
 "use server";
 
 import { getSnapTldRepository } from "@/modules/snaptld/server/repository";
-import type { CreateReportInput, DomainNote, FeedSource, ImportDomainsInput, SnapTldSettings } from "@/modules/snaptld/types";
+import type { AnalyzeQueueInput, CreateReportInput, DomainNote, FeedSource, ImportDomainsInput, SnapTldSettings } from "@/modules/snaptld/types";
 
 const repository = () => getSnapTldRepository();
 
@@ -49,6 +49,10 @@ export async function rerunAnalysisAction(slug: string, step?: string) {
   return repository().rerunAnalysis(slug, step);
 }
 
+export async function analyzeQueueAction(input: AnalyzeQueueInput) {
+  return repository().analyzeQueue(input);
+}
+
 export async function importDomainsAction(input: ImportDomainsInput) {
   return repository().importDomains(input);
 }
@@ -59,6 +63,14 @@ export async function updateFeedScheduleAction(feedId: string, schedule: FeedSou
 
 export async function toggleFeedStatusAction(feedId: string) {
   return repository().toggleFeedStatus(feedId);
+}
+
+export async function runFeedAction(feedId: string) {
+  return repository().runFeed(feedId);
+}
+
+export async function runActiveFeedsAction() {
+  return repository().runActiveFeeds();
 }
 
 export async function createReportAction(input: CreateReportInput) {

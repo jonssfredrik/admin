@@ -15,6 +15,10 @@ export function AreaChart({ data, height = 220, formatValue = (v) => v.toLocaleS
   const padY = 20;
 
   const { path, area, points, max, min } = useMemo(() => {
+    if (data.length === 0) {
+      return { path: "", area: "", points: [] as ({ label: string; value: number; x: number; y: number })[], max: 0, min: 0 };
+    }
+
     const values = data.map((d) => d.value);
     const max = Math.max(...values);
     const min = Math.min(...values);
@@ -31,6 +35,8 @@ export function AreaChart({ data, height = 220, formatValue = (v) => v.toLocaleS
     const area = `${path} L ${points[points.length - 1].x} ${height - padY} L ${points[0].x} ${height - padY} Z`;
     return { path, area, points, max, min };
   }, [data, height]);
+
+  if (points.length === 0) return null;
 
   const activePoint = hover !== null ? points[hover] : null;
 

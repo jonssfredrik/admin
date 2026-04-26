@@ -10,11 +10,16 @@ const verdictColors: Record<Verdict, string> = {
 };
 
 export function getOverviewStats(domains: DomainAnalysis[]) {
-  const total = domains.length;
-  const excellent = domains.filter((domain) => domain.verdict === "excellent").length;
-  const good = domains.filter((domain) => domain.verdict === "good").length;
-  const avg = Math.round(domains.reduce((sum, domain) => sum + domain.totalScore, 0) / Math.max(total, 1));
-  return { total, excellent, good, avg };
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const analyzedDomains = domains.filter((domain) => domain.status === "analyzed");
+  const totalDomains = domains.length;
+  const total = analyzedDomains.length;
+  const importedToday = domains.filter((domain) => domain.fetchedAt.startsWith(todayKey)).length;
+  const analyzedToday = analyzedDomains.filter((domain) => domain.fetchedAt.startsWith(todayKey)).length;
+  const excellent = analyzedDomains.filter((domain) => domain.verdict === "excellent").length;
+  const good = analyzedDomains.filter((domain) => domain.verdict === "good").length;
+  const avg = total > 0 ? Math.round(analyzedDomains.reduce((sum, domain) => sum + domain.totalScore, 0) / total) : 0;
+  return { total, totalDomains, importedToday, analyzedToday, excellent, good, avg };
 }
 
 export function getTopCandidates(domains: DomainAnalysis[], limit = 5) {
@@ -25,10 +30,11 @@ export function getTopCandidates(domains: DomainAnalysis[], limit = 5) {
 }
 
 export function getVerdictDonut(domains: DomainAnalysis[]) {
+  const analyzedDomains = domains.filter((domain) => domain.status === "analyzed");
   return (["excellent", "good", "mediocre", "skip"] as Verdict[])
     .map((verdict) => ({
       label: verdictMeta[verdict].label,
-      value: domains.filter((domain) => domain.verdict === verdict).length,
+      value: analyzedDomains.filter((domain) => domain.verdict === verdict).length,
       color: verdictColors[verdict],
     }))
     .filter((item) => item.value > 0);

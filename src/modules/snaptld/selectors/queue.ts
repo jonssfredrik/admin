@@ -1,7 +1,7 @@
 import type { DomainAnalysis, Verdict } from "@/modules/snaptld/types";
 import { expiryInfo } from "@/modules/snaptld/lib/urgency";
 
-export type QueueSortKey = "score" | "domain" | "expires" | "value";
+export type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value";
 export type QueueSortDir = "asc" | "desc";
 
 export interface QueueFilters {
@@ -51,8 +51,12 @@ export function getQueueRows(
       switch (sortKey) {
         case "domain":
           return a.domain.localeCompare(b.domain) * dir;
+        case "verdict":
+          return a.verdict.localeCompare(b.verdict) * dir;
         case "expires":
           return (expiryInfo(a.expiresAt).days - expiryInfo(b.expiresAt).days) * dir;
+        case "source":
+          return a.source.localeCompare(b.source) * dir;
         case "value":
           return (a.estimatedValue.min - b.estimatedValue.min) * dir;
         case "score":

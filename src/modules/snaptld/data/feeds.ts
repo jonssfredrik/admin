@@ -1,49 +1,44 @@
 import type { RawFeedSource, RawReport } from "@/modules/snaptld/types";
 
-export const feedSources: RawFeedSource[] = [
+export const internetstiftelsenFeeds = [
   {
     id: "iis-se",
+    label: "Internetstiftelsen .se",
     name: "Internetstiftelsen (.se)",
-    url: "https://data.internetstiftelsen.se/expired/daily.json",
-    type: "json",
+    url: "https://data.internetstiftelsen.se/bardate_domains.json",
     tld: ".se",
+  },
+  {
+    id: "iis-nu",
+    label: "Internetstiftelsen .nu",
+    name: "Internetstiftelsen (.nu)",
+    url: "https://data.internetstiftelsen.se/bardate_domains_nu.json",
+    tld: ".nu",
+  },
+] as const;
+
+export const feedSources: RawFeedSource[] = [
+  {
+    id: internetstiftelsenFeeds[0].id,
+    name: internetstiftelsenFeeds[0].name,
+    url: internetstiftelsenFeeds[0].url,
+    type: "json",
+    tld: internetstiftelsenFeeds[0].tld,
     status: "active",
     lastFetched: "2026-04-19 08:14",
     domainsLastRun: 1248,
     cadence: "Dagligen 08:00",
   },
   {
-    id: "iis-nu",
-    name: "Internetstiftelsen (.nu)",
-    url: "https://data.internetstiftelsen.se/expired/nu-daily.json",
+    id: internetstiftelsenFeeds[1].id,
+    name: internetstiftelsenFeeds[1].name,
+    url: internetstiftelsenFeeds[1].url,
     type: "json",
-    tld: ".nu",
+    tld: internetstiftelsenFeeds[1].tld,
     status: "active",
     lastFetched: "2026-04-19 08:14",
     domainsLastRun: 186,
     cadence: "Dagligen 08:00",
-  },
-  {
-    id: "expired-global",
-    name: "ExpiredDomains Global",
-    url: "https://example.com/expired/global.csv",
-    type: "csv",
-    tld: "multi",
-    status: "paused",
-    lastFetched: "2026-04-17 11:40",
-    domainsLastRun: 3420,
-    cadence: "Var 6:e timme",
-  },
-  {
-    id: "snapnames",
-    name: "SnapNames Auctions",
-    url: "https://api.snapnames.example/auctions/feed.json",
-    type: "json",
-    tld: "multi",
-    status: "error",
-    lastFetched: "2026-04-18 22:00",
-    domainsLastRun: 0,
-    cadence: "Var timme",
   },
 ];
 

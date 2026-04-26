@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Download, Eye, FileText, Printer } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Download, Eye, FileText, Printer } from "lucide-react";
+import clsx from "clsx";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
@@ -18,10 +19,43 @@ const formatTone = {
   json: "warning",
 } as const;
 
+type ReportsSortKey = "title" | "generatedAt" | "domains" | "highlight" | "format";
+type ReportsSortDir = "asc" | "desc";
+
 export function ReportsPage({ initialReports }: { initialReports: Report[] }) {
   const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [reports, setReports] = useState(initialReports);
+  const [sortKey, setSortKey] = useState<ReportsSortKey>("generatedAt");
+  const [sortDir, setSortDir] = useState<ReportsSortDir>("desc");
+
+  const sortedReports = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...reports].sort((a, b) => {
+      switch (sortKey) {
+        case "title":
+          return a.title.localeCompare(b.title) * dir;
+        case "domains":
+          return (a.domains - b.domains) * dir;
+        case "highlight":
+          return a.highlight.localeCompare(b.highlight) * dir;
+        case "format":
+          return a.format.localeCompare(b.format) * dir;
+        case "generatedAt":
+        default:
+          return a.generatedAt.localeCompare(b.generatedAt) * dir;
+      }
+    });
+  }, [reports, sortDir, sortKey]);
+
+  const toggleSort = (key: ReportsSortKey) => {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === "title" || key === "highlight" || key === "format" ? "asc" : "desc");
+  };
 
   const download = (report: Report) => {
     const payload = JSON.stringify({ report: report.id, generatedAt: report.generatedAt }, null, 2);
@@ -57,16 +91,16 @@ export function ReportsPage({ initialReports }: { initialReports: Report[] }) {
       <Table>
         <thead>
           <tr>
-            <Th>Titel</Th>
-            <Th>Genererad</Th>
-            <Th className="text-right">Domäner</Th>
-            <Th>Höjdpunkt</Th>
-            <Th>Format</Th>
+            <SortableTh active={sortKey === "title"} dir={sortDir} onClick={() => toggleSort("title")}>Titel</SortableTh>
+            <SortableTh active={sortKey === "generatedAt"} dir={sortDir} onClick={() => toggleSort("generatedAt")}>Genererad</SortableTh>
+            <SortableTh className="text-right" active={sortKey === "domains"} dir={sortDir} onClick={() => toggleSort("domains")}>Domäner</SortableTh>
+            <SortableTh active={sortKey === "highlight"} dir={sortDir} onClick={() => toggleSort("highlight")}>Höjdpunkt</SortableTh>
+            <SortableTh active={sortKey === "format"} dir={sortDir} onClick={() => toggleSort("format")}>Format</SortableTh>
             <Th className="w-10" />
           </tr>
         </thead>
         <tbody>
-          {reports.map((report) => (
+          {sortedReports.map((report) => (
             <tr key={report.id} className="transition-colors hover:bg-bg/50">
               <Td>
                 <Link href={`/snaptld/reports/${report.id}`} className="block">
@@ -94,5 +128,34 @@ export function ReportsPage({ initialReports }: { initialReports: Report[] }) {
         </tbody>
       </Table>
     </div>
+  );
+}
+
+function SortableTh({
+  children,
+  active,
+  dir,
+  onClick,
+  className,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  dir: ReportsSortDir;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <Th className={className}>
+      <button
+        onClick={onClick}
+        className={clsx(
+          "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors",
+          active ? "text-fg" : "hover:text-fg",
+        )}
+      >
+        {children}
+        {active ? (dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />) : <span className="inline-block h-[10px] w-[10px]" />}
+      </button>
+    </Th>
   );
 }

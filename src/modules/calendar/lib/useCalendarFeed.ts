@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatInvoiceAmount, invoiceStatusLabel } from "@/modules/billing/lib/format";
-import { listInvoices } from "@/modules/billing/lib/invoices";
+import { formatInvoiceAmount, invoiceDisplayStatus } from "@/modules/billing/lib/format";
+import { invoiceTotals } from "@/modules/billing/lib/totals";
+import { useCompanies } from "@/modules/billing/lib/useCompanies";
+import { useInvoices } from "@/modules/billing/lib/useInvoices";
 import { domainAnalyses } from "@/modules/snaptld/data";
 import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
 import {
@@ -30,9 +32,12 @@ const verdictLabel = {
 export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
   const eventStore = useEvents();
   const subscriptions = useSubscriptions();
-  const billingInvoices = listInvoices();
+  const { items: billingInvoices } = useInvoices();
+  const { items: companies } = useCompanies();
 
   const externalEvents = useMemo<ResolvedCalendarEvent[]>(() => {
+    const companyName = new Map(companies.map((c) => [c.id, c.name]));
+
     const subscriptionEvents = subscriptions.items
       .filter((subscription) => !subscription.archived && subscription.status === "active")
       .map((subscription) => ({
@@ -59,15 +64,15 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
         instanceId: `billing:${invoice.id}:${invoice.dueDate}`,
         entityId: invoice.id,
         title: `Faktura ${invoice.id}`,
-        description: `${invoice.customerName} · ${formatInvoiceAmount(invoice.amountOre, invoice.currency)}`,
+        description: `${invoice.customer.name} · ${formatInvoiceAmount(invoiceTotals(invoice).totalOre, invoice.currency)}`,
         date: invoice.dueDate,
         category: "deadline" as const,
         source: "billing" as const,
         sourceRef: invoice.id,
         href: `/billing/${invoice.id}`,
         isAggregated: true,
-        statusLabel: invoiceStatusLabel[invoice.status],
-        sourceDetail: invoice.companyName,
+        statusLabel: invoiceDisplayStatus(invoice).label,
+        sourceDetail: companyName.get(invoice.companyId) ?? "Okänt företag",
         actionLabel: "Öppna faktura",
       }));
 
@@ -89,7 +94,7 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
     }));
 
     return [...subscriptionEvents, ...billingEvents, ...snaptldEvents];
-  }, [billingInvoices, subscriptions.items]);
+  }, [billingInvoices, companies, subscriptions.items]);
 
   const events = useMemo(() => {
     const sourceSet = new Set(enabledSources);
