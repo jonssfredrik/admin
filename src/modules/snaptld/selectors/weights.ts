@@ -97,14 +97,23 @@ export function updateWeightInYaml(yaml: string, key: AnalysisCategory, value: n
 function weightedScore(domain: DomainAnalysis, weights: Partial<Record<AnalysisCategory, number>>) {
   const sum = ALL_KEYS.reduce((s, key) => s + (weights[key] ?? 0), 0) || 1;
   const acc = ALL_KEYS.reduce((s, key) => s + domain.categories[key].score * (weights[key] ?? 0), 0);
-  return Math.round(acc / sum);
+  const max = ALL_KEYS.reduce((s, key) => s + (domain.categories[key].scoreMax ?? 100) * (weights[key] ?? 0), 0);
+  const nextScore = Math.round(acc / sum);
+  const nextMax = Math.round(max / sum);
+  return {
+    score: nextScore,
+    maxScore: nextMax,
+    rankScore: Math.max(0, Math.min(100, nextScore)),
+  };
 }
 
 export interface WeightRankingRow {
   slug: string;
   domain: string;
   currentScore: number;
+  currentMaxScore: number;
   nextScore: number;
+  nextMaxScore: number;
   currentRank: number;
   nextRank: number;
 }
@@ -116,15 +125,17 @@ export function buildWeightRanking(
 ): WeightRankingRow[] {
   const currentScored = domains.map((domain) => ({ domain, score: weightedScore(domain, current) }));
   const nextScored = domains.map((domain) => ({ domain, score: weightedScore(domain, next) }));
-  const currentOrder = [...currentScored].sort((a, b) => b.score - a.score).map((row) => row.domain.slug);
-  const nextOrder = [...nextScored].sort((a, b) => b.score - a.score).map((row) => row.domain.slug);
+  const currentOrder = [...currentScored].sort((a, b) => b.score.rankScore - a.score.rankScore).map((row) => row.domain.slug);
+  const nextOrder = [...nextScored].sort((a, b) => b.score.rankScore - a.score.rankScore).map((row) => row.domain.slug);
 
   return nextScored
     .map(({ domain, score }) => ({
       slug: domain.slug,
       domain: domain.domain,
-      currentScore: currentScored.find((row) => row.domain.slug === domain.slug)?.score ?? 0,
-      nextScore: score,
+      currentScore: currentScored.find((row) => row.domain.slug === domain.slug)?.score.score ?? 0,
+      currentMaxScore: currentScored.find((row) => row.domain.slug === domain.slug)?.score.maxScore ?? 100,
+      nextScore: score.score,
+      nextMaxScore: score.maxScore,
       currentRank: currentOrder.indexOf(domain.slug) + 1,
       nextRank: nextOrder.indexOf(domain.slug) + 1,
     }))

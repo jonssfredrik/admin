@@ -1,4 +1,5 @@
 import type { DomainAnalysis } from "@/modules/snaptld/types";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
 function rootName(domain: string) {
   return domain.split(".")[0];
@@ -10,7 +11,7 @@ function similarity(a: DomainAnalysis, b: DomainAnalysis) {
   const lenDiff = Math.abs(rootName(a.domain).length - rootName(b.domain).length);
   score += Math.max(0, 25 - lenDiff * 5);
   if (a.verdict === b.verdict) score += 20;
-  const scoreDiff = Math.abs(a.totalScore - b.totalScore);
+  const scoreDiff = Math.abs(rankingScore(a) - rankingScore(b));
   score += Math.max(0, 15 - scoreDiff * 0.5);
   return score;
 }

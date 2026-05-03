@@ -5,18 +5,20 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const repository = getSnapTldRepository();
-  const [domains, feeds, series, initialUserState] = await Promise.all([
-    repository.listDomains(),
+  const [domainPage, feeds, stats, series, initialUserState] = await Promise.all([
+    repository.listDomainPage({ page: 1, pageSize: 200, sortKey: "score", sortDir: "desc" }),
     repository.listFeeds(),
+    repository.getOverviewStats(),
     repository.getOverviewSeries(),
     getInitialSnapTldUserState(),
   ]);
 
   return (
     <SnapTLDOverviewPage
-      domains={domains}
+      domains={domainPage.items}
       feeds={feeds}
-      scoreTrend={series.scoreTrend}
+      stats={stats}
+      importedPerDay={series.importedPerDay}
       volumePerDay={series.volumePerDay}
       initialUserState={initialUserState}
     />

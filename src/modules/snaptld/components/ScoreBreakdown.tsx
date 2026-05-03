@@ -37,7 +37,7 @@ export function ScoreBreakdown({ categories, linkBase, weights }: Props) {
               <div className="text-[11px] text-muted">Vikt {weights?.[key] ?? category.weight}%</div>
             </div>
             <div className="flex-1">
-              <ScoreBar score={category.score} showValue thick />
+              <ScoreBar score={category.score} maxScore={category.scoreMax} showValue thick />
             </div>
             {linkBase && <ChevronRight size={14} className="shrink-0 text-muted" />}
           </div>

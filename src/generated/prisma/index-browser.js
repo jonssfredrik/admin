@@ -221,6 +221,105 @@ exports.Prisma.DriveActivityScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.BillingCompanyScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  orgNumber: 'orgNumber',
+  vatNumber: 'vatNumber',
+  email: 'email',
+  phone: 'phone',
+  address: 'address',
+  postalCode: 'postalCode',
+  city: 'city',
+  bank: 'bank',
+  iban: 'iban',
+  bankgiro: 'bankgiro',
+  logoDataUrl: 'logoDataUrl',
+  fSkatt: 'fSkatt',
+  isDefault: 'isDefault',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BillingCustomerScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  orgNumber: 'orgNumber',
+  email: 'email',
+  phone: 'phone',
+  address: 'address',
+  postalCode: 'postalCode',
+  city: 'city',
+  contactPerson: 'contactPerson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BillingInvoiceScalarFieldEnum = {
+  id: 'id',
+  companyId: 'companyId',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  customerOrgNumber: 'customerOrgNumber',
+  customerEmail: 'customerEmail',
+  customerPhone: 'customerPhone',
+  customerAddress: 'customerAddress',
+  customerPostalCode: 'customerPostalCode',
+  customerCity: 'customerCity',
+  customerContactPerson: 'customerContactPerson',
+  status: 'status',
+  vatRate: 'vatRate',
+  currency: 'currency',
+  dueDate: 'dueDate',
+  issuedDate: 'issuedDate',
+  paidDate: 'paidDate',
+  paymentTermsDays: 'paymentTermsDays',
+  notes: 'notes',
+  theirReference: 'theirReference',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BillingInvoiceLineScalarFieldEnum = {
+  id: 'id',
+  invoiceId: 'invoiceId',
+  position: 'position',
+  description: 'description',
+  quantity: 'quantity',
+  unit: 'unit',
+  unitPriceOre: 'unitPriceOre',
+  articleNumber: 'articleNumber'
+};
+
+exports.Prisma.SubscriptionScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  category: 'category',
+  status: 'status',
+  amountSEK: 'amountSEK',
+  billingCycle: 'billingCycle',
+  startedAt: 'startedAt',
+  nextRenewal: 'nextRenewal',
+  cancelledAt: 'cancelledAt',
+  website: 'website',
+  notes: 'notes',
+  owner: 'owner',
+  businessExpense: 'businessExpense',
+  reminderDaysBefore: 'reminderDaysBefore',
+  archived: 'archived',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SubscriptionPricePointScalarFieldEnum = {
+  id: 'id',
+  subscriptionId: 'subscriptionId',
+  date: 'date',
+  amountSEK: 'amountSEK',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -239,7 +338,13 @@ exports.Prisma.ModelName = {
   SnapTldImportedDomain: 'SnapTldImportedDomain',
   SnapTldDomainAnalysis: 'SnapTldDomainAnalysis',
   DriveItem: 'DriveItem',
-  DriveActivity: 'DriveActivity'
+  DriveActivity: 'DriveActivity',
+  BillingCompany: 'BillingCompany',
+  BillingCustomer: 'BillingCustomer',
+  BillingInvoice: 'BillingInvoice',
+  BillingInvoiceLine: 'BillingInvoiceLine',
+  Subscription: 'Subscription',
+  SubscriptionPricePoint: 'SubscriptionPricePoint'
 };
 
 /**

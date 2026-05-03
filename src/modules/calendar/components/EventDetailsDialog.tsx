@@ -9,13 +9,11 @@ import {
   FileText,
   Globe,
   Pencil,
-  Radar,
   ReceiptText,
-  Sparkles,
 } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { formatInvoiceAmount, invoiceDisplayStatus } from "@/modules/billing/lib/format";
+import { formatInvoiceAmount, invoiceDisplayNumber, invoiceDisplayStatus } from "@/modules/billing/lib/format";
 import { invoiceTotals } from "@/modules/billing/lib/totals";
 import { useCompanies } from "@/modules/billing/lib/useCompanies";
 import { useInvoices } from "@/modules/billing/lib/useInvoices";
@@ -29,12 +27,10 @@ import {
   sourceMeta,
   type ResolvedCalendarEvent,
 } from "@/modules/calendar/data/core";
-import { domainAnalyses, verdictMeta } from "@/modules/snaptld/data/core";
 import {
   cycleLabel,
   formatSEK,
   ownerMeta,
-  paymentMethodMeta,
   statusMeta,
 } from "@/modules/subscriptions/data/core";
 import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
@@ -96,10 +92,6 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
       ? invoices.find((inv) => inv.id === event.sourceRef) ?? null
       : null;
   const invoiceCompany = invoice ? companies.find((c) => c.id === invoice.companyId) : undefined;
-  const domain =
-    event.source === "snaptld" && event.sourceRef
-      ? domainAnalyses.find((item) => item.slug === event.sourceRef) ?? null
-      : null;
   const dayOffset = daysUntil(event.date);
 
   const relativeLabel =
@@ -206,7 +198,6 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
                     { label: "Cykel", value: cycleLabel[subscription.billingCycle] },
                     { label: "Status", value: statusMeta[subscription.status].label },
                     { label: "Nästa förnyelse", value: subscription.nextRenewal },
-                    { label: "Betalmetod", value: paymentMethodMeta[subscription.paymentMethod ?? "card"].label },
                     { label: "Ägare", value: ownerMeta[subscription.owner ?? "private"].label },
                   ]}
                 />
@@ -221,7 +212,7 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
                 <SectionTitle icon={ReceiptText} title="Fakturadetaljer" />
                 <InfoGrid
                   items={[
-                    { label: "Faktura", value: invoice.id },
+                    { label: "Faktura", value: invoiceDisplayNumber(invoice) },
                     { label: "Bolag", value: invoiceCompany?.name ?? "—" },
                     { label: "Kund", value: invoice.customer.name },
                     { label: "Belopp", value: formatInvoiceAmount(invoiceTotals(invoice).totalOre, invoice.currency) },
@@ -233,29 +224,6 @@ export function EventDetailsDialog({ open, event, onClose, onEditManual }: Props
           </div>
 
           <div className="space-y-5">
-            {domain ? (
-              <div className="space-y-3">
-                <SectionTitle icon={Radar} title="SnapTLD-detaljer" />
-                <InfoGrid
-                  items={[
-                    { label: "Domän", value: domain.domain },
-                    { label: "Score", value: `${domain.totalScore}/100` },
-                    { label: "Verdict", value: verdictMeta[domain.verdict].label },
-                    { label: "Utgångsdatum", value: domain.expiresAt },
-                    { label: "Estimerat värde", value: domain.estimatedValue },
-                    { label: "Källa", value: domain.source },
-                  ]}
-                />
-                <div className="rounded-2xl border bg-bg/30 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Sparkles size={15} />
-                    AI-sammanfattning
-                  </div>
-                  <div className="text-sm text-muted">{domain.aiSummary}</div>
-                </div>
-              </div>
-            ) : null}
-
             <div className="space-y-3">
               <SectionTitle icon={Globe} title="Nästa steg" />
               <div className="rounded-2xl border bg-bg/30 p-4 text-sm text-muted">

@@ -1,0 +1,9 @@
+- Struktur: Bedömer domänens struktur, inklusive längd, siffror och bindestreck, grammatik, stavning/typo.
+- Lexikal analys: Bedömer domännamnets kvalitet, svenska ord, om det är lätt att förstå, betydelse, kontext, vokaler, böjelser.
+- Varumärkespotential (kanske använda LLM?): låter som företag, minnesvärd, kan man bygga brand kring det?, funkar som app/SaaS-namn?
+- Marknad/Användning (kanske använda LLM?): tydlig målgrupp?, kopplad till bransch?, kommersiell intent?, köpkraft hos företag?
+- Risk/problem (kanske använda LLM?): Varumärkskrockar, Juridiska risker, Negativa associationer, för generiskt/svårt att ranka.
+- Säljbarhet (real-world) (kanske använda LLM?): skulle jag vilja köpa det?, finns realistika köpare?, är det "flip-bart" eller kräver rätt köpare?, potentiella användsningsområden?
+- SEO-analys: Integrerar med Moz API för att analysera Domain Authority, Page Authority och backlinks.
+- Historisk analys: Använder Wayback Machine för att kontrollera domänens tidigare innehåll och identifiera eventuella problem som spam eller vuxet innehåll.
+- AI-driven bedömning (även i andra steg såsom varumärkespotential osv): Använder OpenAI GPT-5.4 för att ge en djupare, kontextuell analys av domänens potential.

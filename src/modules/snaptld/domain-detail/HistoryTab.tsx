@@ -16,6 +16,8 @@ export function HistoryTab({
 }) {
   const { wayback } = domain;
   const cat = domain.categories.history;
+  const waybackRun = cat.subAnalyses?.find((item) => item.id === "history-wayback");
+  const hasWaybackData = waybackRun?.status === "complete";
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -24,7 +26,7 @@ export function HistoryTab({
           <h2 className="text-sm font-semibold tracking-tight">Wayback Machine</h2>
           <p className="text-xs text-muted">Historik från arkivet</p>
         </div>
-        <dl className="space-y-2 text-sm">
+        {hasWaybackData ? <dl className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <dt className="text-xs text-muted">Snapshots</dt>
             <dd className="font-semibold tabular-nums">{wayback.snapshots}</dd>
@@ -37,7 +39,11 @@ export function HistoryTab({
             <dt className="text-xs text-muted">Senaste sett</dt>
             <dd className="font-mono text-xs">{wayback.lastSeen}</dd>
           </div>
-        </dl>
+        </dl> : (
+          <div className="rounded-lg border bg-bg/30 p-3 text-xs text-muted">
+            Wayback-data saknas. {waybackRun?.reason ?? "KÃ¶r historik med ansluten Wayback-token fÃ¶r snapshots och historik."}
+          </div>
+        )}
         <a
           href={`https://web.archive.org/web/*/${domain.domain}`}
           target="_blank"
@@ -57,7 +63,11 @@ export function HistoryTab({
           onRun={onRun}
           running={isRunning}
         />
-        {wayback.flags.length === 0 ? (
+        {!hasWaybackData ? (
+          <div className="rounded-lg border bg-bg/30 p-4 text-sm text-muted">
+            Extern historikkontroll Ã¤r inte verifierad.
+          </div>
+        ) : wayback.flags.length === 0 ? (
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-400">
             Inga flaggor. Tidigare innehåll verkar rent.
           </div>

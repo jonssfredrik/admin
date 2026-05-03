@@ -1,1 +1,5 @@
-export { SettingsPage as default } from "@/modules/workspace/settings/pages/SettingsPage";
+import { SettingsPage } from "@/modules/workspace/settings/pages/SettingsPage";
+
+export default function ProfileSettingsPage() {
+  return <SettingsPage section="profile" />;
+}

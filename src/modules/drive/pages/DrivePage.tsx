@@ -112,6 +112,15 @@ function upsertItem(items: DriveItem[], item: DriveItem) {
     : [item, ...items];
 }
 
+function isDescendant(item: DriveItem, folder: DriveItem, allItems: DriveItem[]) {
+  let parentId = item.parentId;
+  while (parentId) {
+    if (parentId === folder.id) return true;
+    parentId = allItems.find((entry) => entry.id === parentId)?.parentId ?? null;
+  }
+  return false;
+}
+
 export function DrivePage({ initialItems }: DrivePageProps) {
   const [items, setItems] = useState(initialItems);
   const [activeScope, setActiveScope] = useState<DriveScope>("recent");
@@ -196,6 +205,19 @@ export function DrivePage({ initialItems }: DrivePageProps) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "Drive API misslyckades");
     return data.item as DriveItem;
+  }
+
+  async function refreshItems(nextPreviewId?: string | null) {
+    const [activeResponse, trashResponse] = await Promise.all([
+      fetch("/api/drive/items?scope=recent&sort=updated"),
+      fetch("/api/drive/items?scope=trash&sort=updated"),
+    ]);
+    const activeData = await activeResponse.json();
+    const trashData = await trashResponse.json();
+    const nextItems = [...(activeData.items as DriveItem[]), ...(trashData.items as DriveItem[])];
+    setItems(nextItems);
+    if (nextPreviewId !== undefined) setPreviewId(nextPreviewId);
+    else if (previewId && !nextItems.some((item) => item.id === previewId)) setPreviewId(null);
   }
 
   function downloadItem(item: DriveItem) {
@@ -313,8 +335,7 @@ export function DrivePage({ initialItems }: DrivePageProps) {
 
   async function duplicateItem(item: DriveItem) {
     const next = await postItem(`/api/drive/items/${item.id}/duplicate`, { method: "POST" });
-    setItems((value) => upsertItem(value, next));
-    setPreviewId(next.id);
+    await refreshItems(next.id);
     showNotice("Objektet duplicerades");
   }
 
@@ -324,15 +345,15 @@ export function DrivePage({ initialItems }: DrivePageProps) {
       method: "PATCH",
       body: JSON.stringify({ parentId: moveParentId }),
     });
-    setItems((value) => upsertItem(value, next));
+    await refreshItems(next.id);
     setMoveTarget(null);
     showNotice("Objektet flyttades");
   }
 
   async function permanentDeleteItem(item: DriveItem) {
-    await fetch(`/api/drive/items/${item.id}?permanent=1`, { method: "DELETE" });
-    setItems((value) => value.filter((entry) => entry.id !== item.id && entry.parentId !== item.id));
-    if (previewId === item.id) setPreviewId(null);
+    const response = await fetch(`/api/drive/items/${item.id}?permanent=1`, { method: "DELETE" });
+    if (!response.ok) throw new Error("Kunde inte radera objektet");
+    await refreshItems(previewId === item.id ? null : undefined);
     showNotice("Objektet raderades permanent");
   }
 
@@ -340,6 +361,7 @@ export function DrivePage({ initialItems }: DrivePageProps) {
     const action = activeScope === "trash" ? "restore" : "delete";
     for (const item of selectedItems) await patchItem(item.id, action);
     setSelectedIds([]);
+    await refreshItems();
   }
 
   async function bulkPermanentDelete() {
@@ -366,6 +388,16 @@ export function DrivePage({ initialItems }: DrivePageProps) {
   }
 
   function menuItems(item: DriveItem): RowMenuEntry[] {
+    if (item.isDeleted) {
+      return [
+        { label: "Preview", icon: Eye, onClick: () => setPreviewId(item.id) },
+        { label: item.kind === "folder" ? "Ladda ned som ZIP" : "Ladda ned", icon: Download, onClick: () => downloadItem(item) },
+        { divider: true },
+        { label: "Återställ", icon: RotateCcw, onClick: () => patchItem(item.id, "restore") },
+        { label: "Radera permanent", icon: Trash2, danger: true, onClick: () => permanentDeleteItem(item) },
+      ];
+    }
+
     return [
       { label: "Preview", icon: Eye, onClick: () => setPreviewId(item.id) },
       { label: item.kind === "folder" ? "Ladda ned som ZIP" : "Ladda ned", icon: Download, onClick: () => downloadItem(item) },
@@ -374,12 +406,7 @@ export function DrivePage({ initialItems }: DrivePageProps) {
       { label: "Byt namn", icon: FileText, onClick: () => openRename(item) },
       { label: item.isFavorite ? "Ta bort favorit" : "Favoritmarkera", icon: Star, onClick: () => patchItem(item.id, "toggleFavorite") },
       { divider: true },
-      ...(item.isDeleted
-        ? [
-            { label: "Återställ", icon: RotateCcw, onClick: () => patchItem(item.id, "restore") },
-            { label: "Radera permanent", icon: Trash2, danger: true, onClick: () => permanentDeleteItem(item) },
-          ]
-        : [{ label: "Flytta till papperskorg", icon: Trash2, danger: true, onClick: () => patchItem(item.id, "delete") }]),
+      { label: "Flytta till papperskorg", icon: Trash2, danger: true, onClick: () => patchItem(item.id, "delete") },
     ];
   }
 
@@ -696,7 +723,7 @@ export function DrivePage({ initialItems }: DrivePageProps) {
         >
           <option value="__root">Drive</option>
           {folders
-            .filter((folder) => folder.id !== moveTarget?.id)
+            .filter((folder) => !moveTarget || (folder.id !== moveTarget.id && !isDescendant(folder, moveTarget, items)))
             .map((folder) => (
               <option key={folder.id} value={folder.id}>
                 {[...folder.path.slice(1), folder.name].join(" / ")}
@@ -734,11 +761,18 @@ function PreviewPanel({ item, onClose, onDownload }: { item: DriveItem; onClose:
 
       <div className="overflow-hidden rounded-xl border bg-bg/50">
         {item.kind === "file" && item.preview.type === "image" ? (
-          <img src={`/api/drive/items/${item.id}/preview`} alt="" className="aspect-[4/3] w-full object-cover" />
+          <img src={item.preview.url ?? `/api/drive/items/${item.id}/preview`} alt="" className="aspect-[4/3] w-full object-cover" />
         ) : item.preview.type === "text" || item.preview.type === "code" ? (
           <pre className="max-h-80 overflow-auto p-4 text-xs leading-6">
             <code>{textPreview ?? item.preview.content ?? "Laddar preview..."}</code>
           </pre>
+        ) : item.preview.type === "pdf" && item.preview.content ? (
+          <div className="p-5">
+            <div className="rounded-lg bg-surface p-5 shadow-soft">
+              <div className="mb-4 h-2 w-24 rounded-full bg-red-500" />
+              <div className="whitespace-pre-line text-sm leading-7">{item.preview.content}</div>
+            </div>
+          </div>
         ) : item.preview.type === "pdf" ? (
           <div className="p-5">
             <div className="rounded-lg bg-surface p-5 shadow-soft">

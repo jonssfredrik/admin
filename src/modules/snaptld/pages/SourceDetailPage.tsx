@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, Th, Td, Badge } from "@/components/ui/Table";
 import { formatDateTime, formatFeedSchedule, formatMoneyRange } from "@/modules/snaptld/lib/format";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 import type { FeedSource, ImportedDomainRecord, Verdict } from "@/modules/snaptld/types";
 
 const verdictTone: Record<Verdict, "success" | "warning" | "danger" | "neutral"> = {
@@ -59,16 +60,16 @@ interface Props {
 export function SourceDetailPage({ feed, domains }: Props) {
   const stats = useMemo(() => {
     const total = domains.length;
-    const analyzed = domains.filter((d) => d.status === "analyzed").length;
+    const analyzedDomains = domains.filter((d) => d.status === "analyzed");
+    const analyzed = analyzedDomains.length;
     const queued = domains.filter((d) => d.status === "queued").length;
     const running = domains.filter((d) => d.status === "running").length;
-    const scored = domains.filter((d) => d.totalScore > 0);
     const avgScore =
-      scored.length > 0
-        ? Math.round(scored.reduce((sum, d) => sum + d.totalScore, 0) / scored.length)
+      analyzedDomains.length > 0
+        ? Math.round(analyzedDomains.reduce((sum, d) => sum + rankingScore(d), 0) / analyzedDomains.length)
         : 0;
     const verdicts: Record<Verdict, number> = { excellent: 0, good: 0, mediocre: 0, skip: 0 };
-    domains.forEach((d) => {
+    analyzedDomains.forEach((d) => {
       verdicts[d.verdict] += 1;
     });
     const batches = new Set(domains.map((d) => d.batchId)).size;
@@ -76,7 +77,7 @@ export function SourceDetailPage({ feed, domains }: Props) {
   }, [domains]);
 
   const topDomains = useMemo(
-    () => [...domains].sort((a, b) => b.totalScore - a.totalScore).slice(0, 25),
+    () => [...domains].sort((a, b) => rankingScore(b) - rankingScore(a)).slice(0, 25),
     [domains],
   );
 
@@ -120,7 +121,7 @@ export function SourceDetailPage({ feed, domains }: Props) {
             {formatFeedSchedule(feed.schedule)}
           </div>
           <div className="text-muted text-xs">Senaste hämtning</div>
-          <div className="font-mono text-xs">{formatDateTime(feed.lastFetchedAt)}</div>
+          <div className="font-mono text-xs">{feed.lastFetchedAt ? formatDateTime(feed.lastFetchedAt) : "Aldrig"}</div>
         </dl>
       </Card>
 
@@ -128,7 +129,11 @@ export function SourceDetailPage({ feed, domains }: Props) {
         <StatCard label="Totalt importerade" value={stats.total.toLocaleString("sv-SE")} hint={`${stats.batches} batcher`} />
         <StatCard label="Analyserade" value={stats.analyzed.toLocaleString("sv-SE")} hint={`${stats.queued} köade · ${stats.running} körs`} />
         <StatCard label="Snittpoäng" value={stats.avgScore > 0 ? String(stats.avgScore) : "—"} hint="Endast analyserade" />
-        <StatCard label="Senaste körning" value={feed.domainsLastRun.toLocaleString("sv-SE")} hint="Hämtade i senaste run" />
+        <StatCard
+          label="Senaste k�rning"
+          value={feed.lastFetchedAt ? feed.domainsLastRun.toLocaleString("sv-SE") : "Ingen"}
+          hint="H�mtade i senaste run"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -140,7 +145,7 @@ export function SourceDetailPage({ feed, domains }: Props) {
                 {stats.verdicts[key].toLocaleString("sv-SE")}
               </div>
             </div>
-            <Badge tone={verdictTone[key]}>{Math.round((stats.verdicts[key] / Math.max(1, stats.total)) * 100)}%</Badge>
+            <Badge tone={verdictTone[key]}>{Math.round((stats.verdicts[key] / Math.max(1, stats.analyzed)) * 100)}%</Badge>
           </Card>
         ))}
       </div>
@@ -179,13 +184,15 @@ export function SourceDetailPage({ feed, domains }: Props) {
                     </Link>
                   </Td>
                   <Td>
-                    <Badge tone={statusTone[domain.status]}>{statusLabel[domain.status]}</Badge>
+                    <Badge tone={statusTone[domain.status]}>
+                      {domain.status === "analyzed" && (domain.scoreMax ?? 100) < 100 ? "Delvis analyserad" : statusLabel[domain.status]}
+                    </Badge>
                   </Td>
                   <Td>
                     <Badge tone={verdictTone[domain.verdict]}>{verdictLabel[domain.verdict]}</Badge>
                   </Td>
                   <Td className={clsx("text-right tabular-nums", domain.totalScore >= 80 && "font-semibold")}>
-                    {domain.totalScore || "—"}
+                    {domain.totalScore ? `${domain.totalScore}/${domain.scoreMax ?? 100}` : "—"}
                   </Td>
                   <Td className="text-right tabular-nums text-xs text-muted">
                     {domain.estimatedValue.max > 0 ? formatMoneyRange(domain.estimatedValue) : "—"}

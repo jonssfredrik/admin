@@ -37,7 +37,7 @@ export function SimilarDomains({ domain, domains }: { domain: DomainAnalysis; do
               <div className="truncate text-[11px] text-muted">{formatMoneyRange(candidate.estimatedValue)}</div>
             </div>
             <div className="w-28 shrink-0">
-              <ScoreBar score={candidate.totalScore} showValue />
+              <ScoreBar score={candidate.totalScore} maxScore={candidate.scoreMax} showValue />
             </div>
             <ArrowRight size={14} className="shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
           </Link>

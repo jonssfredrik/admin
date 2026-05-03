@@ -46,7 +46,7 @@ const statusFilters = [
   { id: "failed", label: "Misslyckade" },
 ] as const;
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 const analysisStepMeta: Array<{ id: AnalysisCategory; label: string; short: string }> = [
   { id: "structure", label: "Struktur", short: "St" },
@@ -340,23 +340,25 @@ function ImportedDomainsPageContent({ domains }: { domains: PaginatedResult<Impo
                   </Link>
                 </Td>
                 <Td>
-                  <Badge tone={statusMeta[domain.status].tone}>{statusMeta[domain.status].label}</Badge>
+                  <Badge tone={statusMeta[domain.status].tone}>
+                    {domain.status === "analyzed" && (domain.scoreMax ?? 100) < 100 ? "Delvis analyserad" : statusMeta[domain.status].label}
+                  </Badge>
                 </Td>
                 <Td>
                   <Badge tone={sourceTones[domain.source]}>{domain.sourceLabel}</Badge>
                 </Td>
                 <Td className="text-xs text-muted">{formatDateTime(domain.importedAt)}</Td>
                 <Td>
-                  <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
+                  <ExpiryBadge expiresAt={domain.expiresAt} source={domain.source} variant="long" />
                 </Td>
                 <Td>
                   <div className="space-y-1.5">
-                    <ScoreBar score={domain.totalScore} showValue />
-                    <AnalysisStepIndicator steps={domain.analysisSteps ?? []} />
+                    <ScoreBar score={domain.totalScore} maxScore={domain.scoreMax} showValue />
+                    <AnalysisStepIndicator steps={domain.analysisSteps ?? []} coverage={domain.analysisCoverage} />
                   </div>
                 </Td>
                 <Td>
-                  <VerdictBadge verdict={domain.verdict} />
+                  <VerdictBadge verdict={domain.verdict} status={domain.status} analyzed={(domain.analysisSteps ?? []).length > 0} />
                 </Td>
                 <Td>
                   <RowMenu
@@ -438,7 +440,13 @@ function SortableTh({
   );
 }
 
-function AnalysisStepIndicator({ steps }: { steps: AnalysisCategory[] }) {
+function AnalysisStepIndicator({
+  steps,
+  coverage,
+}: {
+  steps: AnalysisCategory[];
+  coverage?: Partial<Record<AnalysisCategory, number>>;
+}) {
   const completed = new Set(steps);
   const label = steps.length > 0
     ? `Analyserad: ${analysisStepMeta.filter((step) => completed.has(step.id)).map((step) => step.label).join(", ")}`
@@ -447,14 +455,15 @@ function AnalysisStepIndicator({ steps }: { steps: AnalysisCategory[] }) {
   return (
     <div className="flex items-center gap-1" title={label} aria-label={label}>
       {analysisStepMeta.map((step) => {
-        const active = completed.has(step.id);
+        const pct = coverage?.[step.id] ?? (completed.has(step.id) ? 100 : 0);
         return (
           <span
             key={step.id}
             className={clsx(
               "h-1.5 w-3 rounded-full transition-colors",
-              active ? "bg-fg/70" : "bg-fg/10",
+              pct >= 100 ? "bg-fg/70" : pct > 0 ? "bg-fg/35" : "bg-fg/10",
             )}
+            title={`${step.label}: ${pct}% tÃ¤ckning`}
           />
         );
       })}

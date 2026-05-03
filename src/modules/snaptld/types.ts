@@ -24,11 +24,26 @@ export interface Signal {
   tone: Tone;
 }
 
+export type SubAnalysisStatus = "complete" | "blocked" | "failed";
+
+export interface SubAnalysisResult {
+  id: string;
+  label: string;
+  status: SubAnalysisStatus;
+  score: number;
+  maxScore: number;
+  provider?: string;
+  requiresApiKey?: string;
+  reason?: string;
+}
+
 export interface CategoryResult {
   score: number;
+  scoreMax?: number;
   weight: number;
   signals: Signal[];
   verdict?: string;
+  subAnalyses?: SubAnalysisResult[];
 }
 
 export interface WaybackInfo {
@@ -61,6 +76,8 @@ export interface DomainAnalysis {
   fetchedAt: string;
   expiresAt: string;
   totalScore: number;
+  scoreMax?: number;
+  coverage?: number;
   verdict: Verdict;
   status: AnalysisStatus;
   categories: Record<AnalysisCategory, CategoryResult>;
@@ -86,9 +103,12 @@ export interface DomainRecord {
 export interface ImportedDomainRecord extends DomainRecord {
   sourceLabel: string;
   totalScore: number;
+  scoreMax?: number;
+  coverage?: number;
   verdict: Verdict;
   estimatedValue: MoneyValueRange;
   analysisSteps?: AnalysisCategory[];
+  analysisCoverage?: Partial<Record<AnalysisCategory, number>>;
 }
 
 export interface FeedSchedule {
@@ -161,39 +181,6 @@ export interface SnapTldUserState {
   settings: SnapTldSettings;
 }
 
-export interface RawDomainAnalysis {
-  slug: string;
-  domain: string;
-  tld: string;
-  source: DomainSource;
-  fetchedAt: string;
-  expiresAt: string;
-  totalScore: number;
-  verdict: Verdict;
-  status: AnalysisStatus;
-  categories: Record<AnalysisCategory, CategoryResult>;
-  aiSummary: string;
-  estimatedValue: string;
-  seo: SeoInfo;
-  wayback: WaybackInfo;
-}
-
-export interface RawImportedDomainRecord {
-  slug: string;
-  domain: string;
-  tld: string;
-  source: DomainSource;
-  sourceLabel: string;
-  importedAt: string;
-  importedBy: string;
-  batchId: string;
-  status: AnalysisStatus;
-  expiresAt: string;
-  totalScore: number;
-  verdict: Verdict;
-  estimatedValue: string;
-}
-
 export interface RawFeedSource {
   id: string;
   name: string;
@@ -204,15 +191,6 @@ export interface RawFeedSource {
   lastFetched: string;
   domainsLastRun: number;
   cadence: string;
-}
-
-export interface RawReport {
-  id: string;
-  title: string;
-  generatedAt: string;
-  domains: number;
-  highlight: string;
-  format: ReportFormat;
 }
 
 export interface ImportDomainsInput {
@@ -271,6 +249,19 @@ export interface PaginatedResult<T> {
 export interface QueuePageMeta {
   totalDomains: number;
   uniqueTlds: string[];
+  uniqueSources: DomainSource[];
+  scoreRange: {
+    min: number;
+    max: number;
+  };
+  labelLengthRange: {
+    min: number;
+    max: number;
+  };
+  valueRange: {
+    min: number;
+    max: number;
+  };
 }
 
 export interface ImportedDomainsMeta {
@@ -281,4 +272,16 @@ export interface ImportedDomainsMeta {
   uniqueBatches: number;
   uniqueTlds: string[];
   uniqueSources: Array<{ id: DomainSource; label: string }>;
+}
+
+export interface OverviewStats {
+  total: number;
+  totalDomains: number;
+  importedToday: number;
+  analyzedToday: number;
+  excellent: number;
+  good: number;
+  mediocre: number;
+  skip: number;
+  avg: number;
 }

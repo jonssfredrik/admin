@@ -10,29 +10,32 @@ const fills: Record<Tone, string> = {
 
 interface Props {
   score: number;
+  maxScore?: number;
   showValue?: boolean;
   thick?: boolean;
   tone?: Tone;
 }
 
-export function ScoreBar({ score, showValue, thick, tone }: Props) {
-  const resolved = tone ?? toneForScore(score);
+export function ScoreBar({ score, maxScore = 100, showValue, thick, tone }: Props) {
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const resolved = tone ?? toneForScore(pct);
+  const label = maxScore < 100 ? `${score}/${maxScore}` : String(score);
   return (
     <div className="flex items-center gap-2">
       <div className={clsx("flex-1 overflow-hidden rounded-full bg-fg/5", thick ? "h-2" : "h-1")}>
         <div
           className={clsx("h-full rounded-full transition-all", fills[resolved])}
-          style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, (score / maxScore) * 100))}%` }}
         />
       </div>
       {showValue && (
-        <span className="w-9 text-right font-mono text-xs tabular-nums text-muted">{score}</span>
+        <span className="w-14 text-right font-mono text-xs tabular-nums text-muted">{label}</span>
       )}
     </div>
   );
 }
 
-export function BigScoreRing({ score }: { score: number }) {
+export function BigScoreRing({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
   const radius = 44;
   const circ = 2 * Math.PI * radius;
   const dash = (score / 100) * circ;
@@ -63,7 +66,7 @@ export function BigScoreRing({ score }: { score: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div className="text-2xl font-semibold tabular-nums tracking-tight">{score}</div>
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted">av 100</div>
+        <div className="text-[10px] font-medium uppercase tracking-wider text-muted">av {maxScore}</div>
       </div>
     </div>
   );

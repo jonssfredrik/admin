@@ -1,6 +1,21 @@
 import { badRequest, getApiRepository, ok } from "@/app/api/snaptld/_lib";
-import type { ImportDomainsInput, ImportedDomainRecord } from "@/modules/snaptld/types";
+import type { AnalysisCategory, ImportDomainsInput, ImportedDomainRecord } from "@/modules/snaptld/types";
 
+const validSteps = new Set<string>([
+  "overview",
+  "structure",
+  "lexical",
+  "brand",
+  "market",
+  "risk",
+  "salability",
+  "seo",
+  "history",
+]);
+
+function isAnalysisStep(step: unknown): step is "overview" | AnalysisCategory {
+  return typeof step === "string" && validSteps.has(step);
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -25,5 +40,10 @@ export async function POST(request: Request) {
   if (!body) return badRequest("Ogiltig JSON");
   if (body.mode === "url" && !body.url) return badRequest("URL krävs för url-import");
   if (body.mode !== "url" && !Array.isArray(body.validDomains)) return badRequest("validDomains krävs");
-  return ok(await getApiRepository().importDomains(body));
+  return ok(await getApiRepository().importDomains({
+    ...body,
+    validDomains: Array.isArray(body.validDomains) ? body.validDomains : [],
+    duplicates: Array.isArray(body.duplicates) ? body.duplicates : [],
+    selectedSteps: Array.isArray(body.selectedSteps) ? body.selectedSteps.filter(isAnalysisStep) : [],
+  }));
 }

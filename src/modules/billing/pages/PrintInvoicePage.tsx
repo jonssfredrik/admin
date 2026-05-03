@@ -151,10 +151,6 @@ export function PrintInvoicePage({ id }: { id: string }) {
           style={{ gridTemplateColumns: paymentSlot ? "repeat(4, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))" }}
         >
           <div className="text-center">
-            <div className={labelCls}>Utfärdad</div>
-            <div className="mt-1 text-sm font-semibold">{invoice.issuedDate}</div>
-          </div>
-          <div className="text-center">
             <div className={labelCls}>Förfaller</div>
             <div className="mt-1 text-sm font-semibold">{invoice.dueDate}</div>
           </div>
@@ -170,6 +166,11 @@ export function PrintInvoicePage({ id }: { id: string }) {
               <div className="mt-1 text-sm font-semibold">{paymentSlot.value}</div>
             </div>
           )}
+          
+          <div className="text-center">
+            <div className={labelCls}>OCR / meddelande</div>
+            <div className="mt-1 text-sm font-semibold">{invoiceDisplayNumber(invoice)}</div>
+          </div>
         </section>
 
         <hr className="mt-4 border-neutral-200" />
@@ -284,9 +285,6 @@ export function PrintInvoicePage({ id }: { id: string }) {
                   <span className="text-neutral-900">{invoice.paidDate}</span>
                 </div>
               )}
-              {company?.fSkatt && (
-                <div className="text-xs text-emerald-700">Innehar F-skattsedel</div>
-              )}
             </div>
           </div>
         </section>
@@ -295,8 +293,8 @@ export function PrintInvoicePage({ id }: { id: string }) {
           Faktura {invoice.id} · {company?.name ?? ""}
         </footer> */}
 
-        <footer className="mt-12 text-center text-[11px] text-neutral-400">
-          Fakturan skall betalas senast {invoice.dueDate}.<br></br>Vid utebliven betalning debiteras en påminnelseavift om 50 SEK. Årlig ränta på 28% tillkommer.
+        <footer className="mt-12 text-center text-xs text-neutral-500">
+          Fakturan skall betalas senast {invoice.dueDate}. Ange <span className="text-neutral-900 font-semibold">{invoiceDisplayNumber(invoice)}</span> som meddelande vid betalning till Bankgiro <span className="text-neutral-900 font-semibold">{company?.bankgiro}</span>.
         </footer>
       </main>
     </>

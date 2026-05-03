@@ -70,9 +70,9 @@ export function RenewalsPage() {
 
   const openEdit = (sub: Subscription) => { setEditTarget(sub); setDialogOpen(true); };
 
-  const handleSave = (data: Omit<Subscription, "id">) => {
+  const handleSave = async (data: Omit<Subscription, "id">) => {
     if (!editTarget) return;
-    update(editTarget.id, data);
+    await update(editTarget.id, data);
     success("Abonnemang uppdaterat", editTarget.name);
   };
 
@@ -221,8 +221,9 @@ export function RenewalsPage() {
                                 label: "Markera som betald",
                                 icon: CheckCircle,
                                 onClick: () => {
-                                  markPaid(sub.id);
-                                  success("Markerad som betald", `${sub.name} — nästa förnyelse framflyttad`);
+                                  void markPaid(sub.id).then(() => {
+                                    success("Markerad som betald", `${sub.name} - nästa förnyelse framflyttad`);
+                                  });
                                 },
                               },
                               { label: "Redigera", icon: Pencil, onClick: () => openEdit(sub) },

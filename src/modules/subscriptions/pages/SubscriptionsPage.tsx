@@ -22,12 +22,10 @@ import {
   cycleShortLabel,
   formatSEK,
   ownerMeta,
-  paymentMethodMeta,
   statusMeta,
   toMonthly,
   type BillingCycle,
   type OwnerScope,
-  type PaymentMethod,
   type Subscription,
   type SubscriptionCategory,
   type SubscriptionStatus,
@@ -129,7 +127,7 @@ function SortTh({
 }
 
 export function SubscriptionsPage() {
-  const { items: rawItems, add, update, remove, duplicate, markPaid, setArchived, replaceAll } = useSubscriptions();
+  const { hydrated, error: loadError, items: rawItems, add, update, remove, duplicate, markPaid, setArchived, replaceAll } = useSubscriptions();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { success, error, info } = useToast();
 
@@ -170,6 +168,22 @@ export function SubscriptionsPage() {
         return days >= 0 && days < 31;
       }).length,
     [active],
+  );
+
+  const upcomingRenewals30 = useMemo(
+    () =>
+      active
+        .filter((s) => {
+          const days = Math.floor((new Date(s.nextRenewal).getTime() - Date.now()) / 86400000);
+          return days >= 0 && days < 31;
+        })
+        .sort((a, b) => a.nextRenewal.localeCompare(b.nextRenewal)),
+    [active],
+  );
+
+  const upcomingRenewals30Total = useMemo(
+    () => upcomingRenewals30.reduce((sum, s) => sum + s.amountSEK, 0),
+    [upcomingRenewals30],
   );
 
   const trialsSoon = useMemo(
@@ -255,54 +269,54 @@ export function SubscriptionsPage() {
   const openAdd = () => { setEditTarget(undefined); setDialogOpen(true); };
   const openEdit = (sub: Subscription) => { setEditTarget(sub); setDialogOpen(true); };
 
-  const handleSave = (data: Omit<Subscription, "id">) => {
+  const handleSave = async (data: Omit<Subscription, "id">) => {
     if (editTarget) {
-      update(editTarget.id, data);
+      await update(editTarget.id, data);
       success("Abonnemang uppdaterat", editTarget.name);
     } else {
-      add(data);
+      await add(data);
       success("Abonnemang tillagt", data.name);
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    remove(deleteTarget.id);
+    await remove(deleteTarget.id);
     error("Abonnemang borttaget", deleteTarget.name);
     setDeleteTarget(null);
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!cancelTarget) return;
-    update(cancelTarget.id, { status: "cancelled", cancelledAt: new Date().toISOString().slice(0, 10) });
+    await update(cancelTarget.id, { status: "cancelled", cancelledAt: new Date().toISOString().slice(0, 10) });
     success("Prenumeration avslutad", cancelTarget.name);
     setCancelTarget(null);
   };
 
-  const handleStatusToggle = (sub: Subscription) => {
+  const handleStatusToggle = async (sub: Subscription) => {
     const next = sub.status === "paused" ? "active" : "paused";
-    update(sub.id, { status: next });
+    await update(sub.id, { status: next });
     success(next === "active" ? "Återaktiverat" : "Pausat", sub.name);
   };
 
-  const handleMarkPaid = (sub: Subscription) => {
-    markPaid(sub.id);
+  const handleMarkPaid = async (sub: Subscription) => {
+    await markPaid(sub.id);
     success("Markerad som betald", `${sub.name} — nästa förnyelse framflyttad`);
   };
 
-  const handleDuplicate = (sub: Subscription) => {
-    duplicate(sub.id);
+  const handleDuplicate = async (sub: Subscription) => {
+    await duplicate(sub.id);
     info("Abonnemang duplicerat", `${sub.name} (kopia)`);
   };
 
-  const handleArchiveToggle = (sub: Subscription) => {
+  const handleArchiveToggle = async (sub: Subscription) => {
     const next = !sub.archived;
-    setArchived(sub.id, next);
+    await setArchived(sub.id, next);
     success(next ? "Arkiverat" : "Återställt", sub.name);
   };
 
-  const handleKeepTrial = (sub: Subscription) => {
-    update(sub.id, { status: "active" });
+  const handleKeepTrial = async (sub: Subscription) => {
+    await update(sub.id, { status: "active" });
     success("Behållen", `${sub.name} — nu aktiv prenumeration`);
   };
 
@@ -331,7 +345,6 @@ export function SubscriptionsPage() {
         start: col("start"),
         nasta: col("nasta_fornyelse"),
         avslutad: col("avslutad"),
-        betalmetod: col("betalmetod"),
         typ: col("typ"),
         foretag: col("foretag"),
         paminn: col("paminn_dagar"),
@@ -346,7 +359,6 @@ export function SubscriptionsPage() {
       const validCats = Object.keys(categoryMeta) as SubscriptionCategory[];
       const validCycles: BillingCycle[] = ["monthly", "quarterly", "annual", "biannual"];
       const validStatuses: SubscriptionStatus[] = ["active", "trial", "paused", "cancelled"];
-      const validMethods = Object.keys(paymentMethodMeta) as PaymentMethod[];
       const validOwners = Object.keys(ownerMeta) as OwnerScope[];
 
       const imported: Subscription[] = [];
@@ -373,10 +385,6 @@ export function SubscriptionsPage() {
           nextRenewal: nasta,
         };
         if (idx.avslutad >= 0 && row[idx.avslutad]?.trim()) sub.cancelledAt = row[idx.avslutad].trim();
-        if (idx.betalmetod >= 0) {
-          const pm = row[idx.betalmetod]?.trim() as PaymentMethod;
-          if (validMethods.includes(pm)) sub.paymentMethod = pm;
-        }
         if (idx.typ >= 0) {
           const own = row[idx.typ]?.trim() as OwnerScope;
           if (validOwners.includes(own)) sub.owner = own;
@@ -395,7 +403,7 @@ export function SubscriptionsPage() {
         error("Import misslyckades", `Inga giltiga rader (${skipped} hoppade över)`);
         return;
       }
-      replaceAll([...imported, ...rawItems]);
+      await replaceAll(imported);
       success("Import klar", `${imported.length} abonnemang importerade${skipped ? ` · ${skipped} hoppade över` : ""}`);
     } catch (err) {
       error("Import misslyckades", err instanceof Error ? err.message : "Okänt fel");
@@ -405,12 +413,12 @@ export function SubscriptionsPage() {
   const handleExportCSV = () => {
     const header = [
       "namn","beskrivning","kategori","status","belopp_sek","cykel",
-      "start","nasta_fornyelse","avslutad","betalmetod","typ","foretag",
+      "start","nasta_fornyelse","avslutad","typ","foretag",
       "paminn_dagar","arkiverad","webbplats","anteckningar",
     ];
     const rows = rawItems.map((s) => [
       s.name, s.description, s.category, s.status, String(s.amountSEK), s.billingCycle,
-      s.startedAt, s.nextRenewal, s.cancelledAt ?? "", s.paymentMethod ?? "", s.owner ?? "",
+      s.startedAt, s.nextRenewal, s.cancelledAt ?? "", s.owner ?? "",
       s.businessExpense ? "ja" : "nej", String(s.reminderDaysBefore ?? ""),
       s.archived ? "ja" : "nej", s.website ?? "", s.notes ?? "",
     ]);
@@ -498,10 +506,15 @@ export function SubscriptionsPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Aktiva abonnemang" value={String(active.length)} hint={`${items.length} totalt`} />
         <StatCard label="Månadskostnad" value={formatSEK(Math.round(monthlyCost))} hint="Aktiva + testperiod" />
         <StatCard label="Årskostnad" value={formatSEK(Math.round(annualCost))} hint="Prognos helår" />
+        <StatCard
+          label="Kommande förnyelser"
+          value={String(upcomingRenewals30.length)}
+          hint={upcomingRenewals30.length > 0 ? `Inom 30 dagar · ${formatSEK(upcomingRenewals30Total)}` : "Inga inom 30 dagar"}
+        />
         <StatCard
           label="Förfaller inom 30 dagar"
           value={String(expiringSoon)}
@@ -519,7 +532,13 @@ export function SubscriptionsPage() {
             </div>
           </div>
           <div className="mt-4">
-            <AreaChart data={costTrend} height={190} formatValue={(v) => formatSEK(v)} />
+            {costTrend.length > 0 ? (
+              <AreaChart data={costTrend} height={190} formatValue={(v) => formatSEK(v)} />
+            ) : (
+              <div className="flex h-[190px] items-center justify-center rounded-lg border border-dashed text-sm text-muted">
+                Lägg till abonnemang för att se kostnad över tid.
+              </div>
+            )}
           </div>
         </Card>
 
@@ -547,7 +566,13 @@ export function SubscriptionsPage() {
             </div>
           </div>
           <div className="mt-5">
-            <DonutChart data={donutData} size={150} />
+            {donutData.length > 0 ? (
+              <DonutChart data={donutData} size={150} />
+            ) : (
+              <div className="flex h-[150px] items-center justify-center rounded-lg border border-dashed text-sm text-muted">
+                Ingen kategorifördelning ännu.
+              </div>
+            )}
           </div>
         </Card>
       </div>
@@ -707,9 +732,19 @@ export function SubscriptionsPage() {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {!hydrated ? (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm text-muted">Inga abonnemang matchar filtret.</p>
+            <p className="text-sm text-muted">Läser in abonnemang...</p>
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-muted">
+              {rawItems.length === 0 ? "Inga abonnemang ännu. Lägg till ett abonnemang för att komma igång." : "Inga abonnemang matchar filtret."}
+            </p>
           </div>
         ) : (
           <Table>

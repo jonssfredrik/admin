@@ -1,78 +1,86 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { defaultCompanies } from "@/modules/billing/data";
+import { useCallback, useEffect, useState } from "react";
 import type { Company } from "@/modules/billing/types";
 
-const KEY = "billing.companies";
 const listeners = new Set<() => void>();
 
-function read(): Company[] {
-  if (typeof window === "undefined") return defaultCompanies;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return defaultCompanies;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : defaultCompanies;
-  } catch {
-    return defaultCompanies;
-  }
-}
-
-function write(items: Company[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(items));
+function notify() {
   listeners.forEach((l) => l());
 }
 
+async function fetchCompanies(): Promise<Company[]> {
+  const res = await fetch("/api/billing/companies", { cache: "no-store" });
+  if (!res.ok) throw new Error("Kunde inte ladda företag");
+  const json = (await res.json()) as { items: Company[] };
+  return json.items;
+}
+
 export function useCompanies() {
-  const [items, setItems] = useState<Company[]>(defaultCompanies);
+  const [items, setItems] = useState<Company[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    setItems(read());
-    setHydrated(true);
-    const update = () => setItems(read());
-    listeners.add(update);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) update();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => {
-      listeners.delete(update);
-      window.removeEventListener("storage", onStorage);
-    };
+  const refresh = useCallback(async () => {
+    try {
+      const next = await fetchCompanies();
+      setItems(next);
+    } catch (error) {
+      console.error("useCompanies refresh failed", error);
+    }
   }, []);
+
+  useEffect(() => {
+    refresh().finally(() => setHydrated(true));
+    listeners.add(refresh);
+    return () => {
+      listeners.delete(refresh);
+    };
+  }, [refresh]);
 
   return {
     hydrated,
     items,
-    add(company: Omit<Company, "id">) {
-      const current = read();
-      const isFirst = current.length === 0;
-      const next = [
-        { ...company, id: `co-${Date.now()}`, isDefault: isFirst ? true : company.isDefault },
-        ...current,
-      ];
-      write(next);
-    },
-    update(id: string, updates: Partial<Omit<Company, "id">>) {
-      write(read().map((c) => (c.id === id ? { ...c, ...updates } : c)));
-    },
-    remove(id: string) {
-      const current = read();
-      const removed = current.find((c) => c.id === id);
-      const filtered = current.filter((c) => c.id !== id);
-      if (removed?.isDefault && filtered.length > 0) {
-        filtered[0] = { ...filtered[0], isDefault: true };
+    async add(input: Omit<Company, "id">) {
+      const res = await fetch("/api/billing/companies", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error("Kunde inte spara företag");
+      const json = (await res.json()) as { company: Company };
+      // Setting a new default rotates other rows — refetch instead of patching locally.
+      if (json.company.isDefault) {
+        await refresh();
+      } else {
+        setItems((prev) => [...prev, json.company]);
       }
-      write(filtered);
+      notify();
+      return json.company;
     },
-    setDefault(id: string) {
-      write(read().map((c) => ({ ...c, isDefault: c.id === id })));
+    async update(id: string, updates: Partial<Omit<Company, "id">>) {
+      const res = await fetch(`/api/billing/companies/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Kunde inte uppdatera företag");
+      const json = (await res.json()) as { company: Company };
+      setItems((prev) => prev.map((c) => (c.id === id ? json.company : c)));
+      notify();
+      return json.company;
     },
-    reset() {
-      write(defaultCompanies);
+    async remove(id: string) {
+      const res = await fetch(`/api/billing/companies/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Kunde inte ta bort företag");
+      // Default-flaggan kan ha hoppat till nästa företag — hämta om listan.
+      await refresh();
+      notify();
+    },
+    async setDefault(id: string) {
+      const res = await fetch(`/api/billing/companies/${id}/default`, { method: "POST" });
+      if (!res.ok) throw new Error("Kunde inte sätta standardföretag");
+      await refresh();
+      notify();
     },
   };
 }

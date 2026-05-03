@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlarmClock, Clock } from "lucide-react";
 import clsx from "clsx";
-import { expiryInfo } from "@/modules/snaptld/lib/urgency";
+import { expiryInfoFromSource } from "@/modules/snaptld/lib/urgency";
 
 const toneClasses = {
   danger: "border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400",
@@ -14,11 +14,12 @@ const toneClasses = {
 
 interface Props {
   expiresAt: string;
+  source?: string;
   variant?: "short" | "long";
   className?: string;
 }
 
-export function ExpiryBadge({ expiresAt, variant = "short", className }: Props) {
+export function ExpiryBadge({ expiresAt, source = "", variant = "short", className }: Props) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function ExpiryBadge({ expiresAt, variant = "short", className }: Props) 
     return () => clearInterval(id);
   }, []);
 
-  const info = expiryInfo(expiresAt, now ?? new Date(expiresAt));
+  const info = expiryInfoFromSource(expiresAt, source, now ?? new Date(expiresAt));
   const Icon = info.tone === "danger" ? AlarmClock : Clock;
 
   return (

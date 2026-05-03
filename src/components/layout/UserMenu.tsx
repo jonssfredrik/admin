@@ -45,7 +45,7 @@ export function UserMenu() {
     [
       { label: "Profil", icon: User, onClick: () => { close(); router.push("/settings"); }, shortcut: "⇧⌘P" },
       { label: "Inställningar", icon: Settings, onClick: () => { close(); router.push("/settings"); }, shortcut: "⌘," },
-      { label: "Fakturering", icon: CreditCard, onClick: () => { close(); router.push("/settings"); } },
+      { label: "Fakturering", icon: CreditCard, onClick: () => { close(); router.push("/settings/billing"); } },
     ],
     [
       { label: "Hjälp & support", icon: HelpCircle, onClick: close },

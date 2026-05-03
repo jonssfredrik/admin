@@ -35,12 +35,12 @@ export function CandidateRow({ domain }: { domain: DomainAnalysis }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-semibold">{domain.domain}</span>
           <VerdictBadge verdict={domain.verdict} />
-          <ExpiryBadge expiresAt={domain.expiresAt} />
+          <ExpiryBadge expiresAt={domain.expiresAt} source={domain.source} />
         </div>
         <div className="mt-0.5 truncate text-xs text-muted">{formatMoneyRange(domain.estimatedValue)}</div>
       </div>
       <div className="w-40 shrink-0">
-        <ScoreBar score={domain.totalScore} showValue />
+        <ScoreBar score={domain.totalScore} maxScore={domain.scoreMax} showValue />
       </div>
       <WatchButton slug={domain.slug} domain={domain.domain} variant="icon" />
       <ChevronRight size={16} className="shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />

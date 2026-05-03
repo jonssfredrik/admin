@@ -71,9 +71,9 @@ const coreRoutes: CoreRoute[] = [
     area: "workspace",
     children: [
       { href: "/settings", label: "Profil" },
-      { href: "/settings#account", label: "Konto" },
-      { href: "/settings#billing", label: "Fakturering" },
-      { href: "/settings#notifications", label: "Notifikationer" },
+      { href: "/settings/account", label: "Konto" },
+      { href: "/settings/billing", label: "Fakturering" },
+      { href: "/settings/notifications", label: "Notifieringar" },
     ],
   },
 ];

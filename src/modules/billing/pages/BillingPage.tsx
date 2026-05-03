@@ -127,11 +127,11 @@ export function BillingPage() {
     update(invoice.id, { status: "draft", paidDate: undefined });
     toast.info("Återställd till utkast", invoiceDisplayNumber(invoice));
   };
-  const handleDuplicate = (invoice: Invoice) => {
-    const newId = duplicate(invoice.id);
-    if (newId) {
-      toast.success("Faktura duplicerad", invoiceDisplayNumber({ id: newId }));
-      router.push(`/billing/${newId}/edit`);
+  const handleDuplicate = async (invoice: Invoice) => {
+    const copy = await duplicate(invoice.id);
+    if (copy) {
+      toast.success("Faktura duplicerad", invoiceDisplayNumber(copy));
+      router.push(`/billing/${copy.id}/edit`);
     }
   };
 

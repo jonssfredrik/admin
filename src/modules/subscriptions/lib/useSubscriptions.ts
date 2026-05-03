@@ -1,106 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { advanceRenewal, defaultSubscriptions, type PricePoint, type Subscription } from "@/modules/subscriptions/data/core";
+import { useCallback, useEffect, useState } from "react";
+import type { Subscription } from "@/modules/subscriptions/data/core";
 
-const KEY = "subscriptions.items";
 const listeners = new Set<() => void>();
 
-function read(): Subscription[] {
-  if (typeof window === "undefined") return defaultSubscriptions;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return defaultSubscriptions;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultSubscriptions;
-  } catch {
-    return defaultSubscriptions;
-  }
-}
-
-function write(items: Subscription[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(items));
+function notify() {
   listeners.forEach((l) => l());
 }
 
-function withPriceChange(sub: Subscription, newAmount: number): Subscription {
-  if (sub.amountSEK === newAmount) return sub;
-  const today = new Date().toISOString().slice(0, 10);
-  const history: PricePoint[] = sub.priceHistory ?? [{ date: sub.startedAt, amountSEK: sub.amountSEK }];
-  const last = history[history.length - 1];
-  const next = last && last.date === today
-    ? [...history.slice(0, -1), { date: today, amountSEK: newAmount }]
-    : [...history, { date: today, amountSEK: newAmount }];
-  return { ...sub, amountSEK: newAmount, priceHistory: next };
+async function readError(res: Response, fallback: string): Promise<Error> {
+  try {
+    const json = (await res.json()) as { error?: string };
+    return new Error(json.error || fallback);
+  } catch {
+    return new Error(fallback);
+  }
+}
+
+async function fetchSubscriptions(): Promise<Subscription[]> {
+  const res = await fetch("/api/subscriptions", { cache: "no-store" });
+  if (!res.ok) throw await readError(res, "Kunde inte ladda abonnemang");
+  const json = (await res.json()) as { items: Subscription[] };
+  return json.items;
 }
 
 export function useSubscriptions() {
-  const [items, setItems] = useState<Subscription[]>(defaultSubscriptions);
+  const [items, setItems] = useState<Subscription[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const next = await fetchSubscriptions();
+      setItems(next);
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Kunde inte ladda abonnemang";
+      setError(message);
+      console.error("useSubscriptions refresh failed", err);
+    }
+  }, []);
 
   useEffect(() => {
-    setItems(read());
-    setHydrated(true);
-    const update = () => setItems(read());
-    listeners.add(update);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) update();
-    };
-    window.addEventListener("storage", onStorage);
+    refresh().finally(() => setHydrated(true));
+    listeners.add(refresh);
     return () => {
-      listeners.delete(update);
-      window.removeEventListener("storage", onStorage);
+      listeners.delete(refresh);
     };
+  }, [refresh]);
+
+  const add = useCallback(async (input: Omit<Subscription, "id">): Promise<Subscription> => {
+      const res = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw await readError(res, "Kunde inte spara abonnemang");
+      const json = (await res.json()) as { subscription: Subscription };
+      setItems((prev) => [json.subscription, ...prev]);
+      notify();
+      return json.subscription;
+  }, []);
+
+  const update = useCallback(async (id: string, updates: Partial<Omit<Subscription, "id">>): Promise<Subscription> => {
+      const res = await fetch(`/api/subscriptions/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw await readError(res, "Kunde inte uppdatera abonnemang");
+      const json = (await res.json()) as { subscription: Subscription };
+      setItems((prev) => prev.map((sub) => (sub.id === id ? json.subscription : sub)));
+      notify();
+      return json.subscription;
   }, []);
 
   return {
     hydrated,
+    error,
     items,
-    add(sub: Omit<Subscription, "id">) {
-      const next = [{ ...sub, id: `sub-${Date.now()}` }, ...read()];
-      write(next);
+    add,
+    update,
+    async remove(id: string): Promise<void> {
+      const res = await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw await readError(res, "Kunde inte ta bort abonnemang");
+      setItems((prev) => prev.filter((sub) => sub.id !== id));
+      notify();
     },
-    update(id: string, updates: Partial<Omit<Subscription, "id">>) {
-      const next = read().map((s) => {
-        if (s.id !== id) return s;
-        const merged = { ...s, ...updates };
-        if (updates.amountSEK !== undefined && updates.amountSEK !== s.amountSEK) {
-          return withPriceChange(merged, updates.amountSEK);
-        }
-        return merged;
-      });
-      write(next);
+    async duplicate(id: string): Promise<Subscription | undefined> {
+      const res = await fetch(`/api/subscriptions/${id}/duplicate`, { method: "POST" });
+      if (!res.ok) throw await readError(res, "Kunde inte duplicera abonnemang");
+      const json = (await res.json()) as { subscription: Subscription };
+      setItems((prev) => [json.subscription, ...prev]);
+      notify();
+      return json.subscription;
     },
-    remove(id: string) {
-      write(read().filter((s) => s.id !== id));
+    async markPaid(id: string): Promise<Subscription> {
+      const res = await fetch(`/api/subscriptions/${id}/mark-paid`, { method: "POST" });
+      if (!res.ok) throw await readError(res, "Kunde inte markera som betald");
+      const json = (await res.json()) as { subscription: Subscription };
+      setItems((prev) => prev.map((sub) => (sub.id === id ? json.subscription : sub)));
+      notify();
+      return json.subscription;
     },
-    duplicate(id: string) {
-      const src = read().find((s) => s.id === id);
-      if (!src) return;
-      const copy: Subscription = {
-        ...src,
-        id: `sub-${Date.now()}`,
-        name: `${src.name} (kopia)`,
-      };
-      write([copy, ...read()]);
+    async setArchived(id: string, archived: boolean): Promise<Subscription> {
+      return update(id, { archived });
     },
-    markPaid(id: string) {
-      const next = read().map((s) => {
-        if (s.id !== id) return s;
-        return { ...s, nextRenewal: advanceRenewal(s.nextRenewal, s.billingCycle) };
-      });
-      write(next);
+    async replaceAll(newItems: Subscription[]): Promise<void> {
+      for (const item of newItems) {
+        const { id: _id, ...input } = item;
+        await add(input);
+      }
+      notify();
     },
-    setArchived(id: string, archived: boolean) {
-      const next = read().map((s) => (s.id === id ? { ...s, archived } : s));
-      write(next);
-    },
-    replaceAll(newItems: Subscription[]) {
-      write(newItems);
-    },
-    reset() {
-      write(defaultSubscriptions);
-    },
+    refresh,
   };
 }

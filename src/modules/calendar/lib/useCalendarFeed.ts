@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatInvoiceAmount, invoiceDisplayStatus } from "@/modules/billing/lib/format";
+import { formatInvoiceAmount, invoiceDisplayNumber, invoiceDisplayStatus } from "@/modules/billing/lib/format";
 import { invoiceTotals } from "@/modules/billing/lib/totals";
 import { useCompanies } from "@/modules/billing/lib/useCompanies";
 import { useInvoices } from "@/modules/billing/lib/useInvoices";
-import { domainAnalyses } from "@/modules/snaptld/data";
 import { useSubscriptions } from "@/modules/subscriptions/lib/useSubscriptions";
 import {
   daysUntil,
@@ -22,12 +21,6 @@ interface Range {
   end: string;
 }
 
-const verdictLabel = {
-  excellent: "Utmärkt",
-  good: "Bra",
-  mediocre: "Medel",
-  skip: "Svag",
-} as const;
 
 export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
   const eventStore = useEvents();
@@ -63,7 +56,7 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
         id: invoice.id,
         instanceId: `billing:${invoice.id}:${invoice.dueDate}`,
         entityId: invoice.id,
-        title: `Faktura ${invoice.id}`,
+        title: `Faktura ${invoiceDisplayNumber(invoice)}`,
         description: `${invoice.customer.name} · ${formatInvoiceAmount(invoiceTotals(invoice).totalOre, invoice.currency)}`,
         date: invoice.dueDate,
         category: "deadline" as const,
@@ -76,24 +69,7 @@ export function useCalendarFeed(range: Range, enabledSources: EventSource[]) {
         actionLabel: "Öppna faktura",
       }));
 
-    const snaptldEvents = domainAnalyses.map((domain) => ({
-      id: domain.slug,
-      instanceId: `snaptld:${domain.slug}:${domain.expiresAt}`,
-      entityId: domain.slug,
-      title: domain.domain,
-      description: `Utgångsdatum · ${verdictLabel[domain.verdict]}`,
-      date: domain.expiresAt,
-      category: "reminder" as const,
-      source: "snaptld" as const,
-      sourceRef: domain.slug,
-      href: `/snaptld/${domain.slug}`,
-      isAggregated: true,
-      statusLabel: domain.status === "running" ? "Analys pågår" : verdictLabel[domain.verdict],
-      sourceDetail: "Domänbevakning",
-      actionLabel: "Öppna domän",
-    }));
-
-    return [...subscriptionEvents, ...billingEvents, ...snaptldEvents];
+    return [...subscriptionEvents, ...billingEvents];
   }, [billingInvoices, companies, subscriptions.items]);
 
   const events = useMemo(() => {

@@ -181,7 +181,7 @@ export function WeightsPage({
                   )}
                 </div>
                 <div className="w-32 shrink-0">
-                  <ScoreBar score={row.nextScore} showValue />
+                  <ScoreBar score={row.nextScore} maxScore={row.nextMaxScore} showValue />
                 </div>
                 <div
                   className={clsx(

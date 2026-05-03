@@ -30,7 +30,6 @@ import {
   cycleShortLabel,
   formatSEK,
   ownerMeta,
-  paymentMethodMeta,
   statusMeta,
   toMonthly,
   type Subscription,
@@ -99,35 +98,35 @@ export default function DetailPage({ params }: { params: Promise<{ id: string }>
     }));
   }, [sub]);
 
-  const handleSave = (data: Omit<Subscription, "id">) => {
-    update(sub.id, data);
+  const handleSave = async (data: Omit<Subscription, "id">) => {
+    await update(sub.id, data);
     success("Abonnemang uppdaterat", sub.name);
   };
 
-  const handleMarkPaid = () => {
-    markPaid(sub.id);
+  const handleMarkPaid = async () => {
+    await markPaid(sub.id);
     success("Markerad som betald", "Nästa förnyelse framflyttad");
   };
 
-  const handleDuplicate = () => {
-    duplicate(sub.id);
+  const handleDuplicate = async () => {
+    await duplicate(sub.id);
     info("Abonnemang duplicerat", `${sub.name} (kopia)`);
   };
 
-  const handleArchive = () => {
+  const handleArchive = async () => {
     const next = !sub.archived;
-    setArchived(sub.id, next);
+    await setArchived(sub.id, next);
     success(next ? "Arkiverat" : "Återställt", sub.name);
   };
 
-  const handleCancel = () => {
-    update(sub.id, { status: "cancelled", cancelledAt: new Date().toISOString().slice(0, 10) });
+  const handleCancel = async () => {
+    await update(sub.id, { status: "cancelled", cancelledAt: new Date().toISOString().slice(0, 10) });
     success("Prenumeration avslutad", sub.name);
     setCancelOpen(false);
   };
 
-  const handleDelete = () => {
-    remove(sub.id);
+  const handleDelete = async () => {
+    await remove(sub.id);
     error("Abonnemang borttaget", sub.name);
     router.push("/subscriptions");
   };
@@ -265,7 +264,6 @@ export default function DetailPage({ params }: { params: Promise<{ id: string }>
           <div className="divide-y px-5">
             <InfoRow label="Startdatum" value={formatDate(sub.startedAt)} />
             <InfoRow label="Fakturacykel" value={cycleLabel[sub.billingCycle]} />
-            <InfoRow label="Betalmetod" value={paymentMethodMeta[sub.paymentMethod ?? "card"].label} />
             <InfoRow label="Typ" value={<Badge tone={own.tone}>{own.label}</Badge>} />
             <InfoRow label="Företagsutgift" value={sub.businessExpense ? "Ja" : "Nej"} />
             <InfoRow label="Påminn" value={sub.reminderDaysBefore != null ? `${sub.reminderDaysBefore} dagar innan` : "—"} />
@@ -322,7 +320,7 @@ export default function DetailPage({ params }: { params: Promise<{ id: string }>
             variant="secondary"
             onClick={() => {
               const next = sub.status === "paused" ? "active" : "paused";
-              update(sub.id, { status: next });
+              void update(sub.id, { status: next });
               success(next === "active" ? "Återaktiverat" : "Pausat", sub.name);
             }}
             className="gap-1.5"

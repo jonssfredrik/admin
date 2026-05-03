@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/toast/ToastProvider";
 import { InvoiceForm } from "@/modules/billing/components/InvoiceForm";
+import { invoiceDisplayNumber } from "@/modules/billing/lib/format";
 import { useInvoices } from "@/modules/billing/lib/useInvoices";
 import type { Invoice } from "@/modules/billing/types";
 
@@ -14,10 +15,10 @@ export function NewInvoicePage() {
   const toast = useToast();
   const { add } = useInvoices();
 
-  const handleSubmit = (data: Omit<Invoice, "id">) => {
-    const id = add(data);
-    toast.success("Faktura skapad", id);
-    router.push(`/billing/${id}`);
+  const handleSubmit = async (data: Omit<Invoice, "id">) => {
+    const created = await add(data);
+    toast.success("Faktura skapad", invoiceDisplayNumber(created));
+    router.push(`/billing/${created.id}`);
   };
 
   return (

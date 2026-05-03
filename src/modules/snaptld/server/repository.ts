@@ -6,38 +6,18 @@ import type {
   SnapTldState as PrismaStateRow,
 } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
-import { feedSources as rawFeeds, internetstiftelsenFeeds, reports as rawReports } from "@/modules/snaptld/data/feeds";
-import { importedDomains as rawImportedDomains } from "@/modules/snaptld/data/imports";
+import { feedSources as rawFeeds, internetstiftelsenFeeds } from "@/modules/snaptld/data/feeds";
 import { defaultWeightsYaml } from "@/modules/snaptld/data/weights";
-import { domainAnalyses as rawDomains, scoreTrend, volumePerDay } from "@/modules/snaptld/data/core";
-import {
-  addMockListValues,
-  appendDomainAnalyses,
-  appendImportedDomains,
-  appendReport,
-  getDomainOverrides,
-  getFeedOverride,
-  getImportedDomainOverrides,
-  getMockUserState,
-  getReportOverrides,
-  resetMockWeights,
-  saveFeedOverride,
-  saveMockNote,
-  saveMockSettings,
-  saveMockWeights,
-  toggleMockListValue,
-  upsertDomainAnalysis,
-  upsertImportedDomain,
-} from "@/modules/snaptld/server/mock-state";
 import {
   createDefaultUserState,
-  mapRawDomainAnalysis,
+  createDefaultSettings,
   mapRawFeed,
-  mapRawImportedDomain,
-  mapRawReport,
 } from "@/modules/snaptld/server/mappers";
 import { parseWeightsConfig } from "@/modules/snaptld/selectors/weights";
 import { analyzeSwedishDomain, type SwedishDomainProfile } from "@/modules/snaptld/server/swedish-lexicon";
+import { runOpenAiAnalysis, runOpenAiAnalysisBatch, type AiDomainAnalysis, type AiAnalysisContext, type AiBatchItem } from "@/modules/snaptld/server/openai";
+import { fetchWhoisAge, whoisAgeScore, type WhoisAgeResult } from "@/modules/snaptld/server/whois";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 import type {
   AnalysisCategory,
   AnalyzeQueueInput,
@@ -52,21 +32,36 @@ import type {
   ImportDomainsInput,
   ImportedDomainRecord,
   ImportedDomainsMeta,
+  OverviewStats,
   PaginatedResult,
   QueuePageMeta,
-  RawDomainAnalysis,
-  RawImportedDomainRecord,
   Report,
   RunFeedsResult,
   Signal,
   SnapTldSettings,
   SnapTldUserState,
+  SubAnalysisResult,
 } from "@/modules/snaptld/types";
 
-type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value";
+type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis";
 type SortDir = "asc" | "desc";
 type ImportedSortKey = "domain" | "status" | "source" | "importedAt" | "expiresAt" | "score" | "verdict";
 type AnalysisStep = AnalyzeQueueInput["steps"][number];
+type PrismaDomainAnalysisSummaryRow = Pick<
+  PrismaDomainAnalysisRow,
+  | "slug"
+  | "domain"
+  | "tld"
+  | "source"
+  | "fetchedAt"
+  | "expiresAt"
+  | "status"
+  | "aiSummary"
+  | "estimatedValueMin"
+  | "estimatedValueMax"
+  | "estimatedValueCurrency"
+  | "categoriesJson"
+>;
 type AnalysisConfig = {
   weights: Record<AnalysisCategory, number>;
   thresholds: {
@@ -81,14 +76,29 @@ export interface DomainPageQuery {
   pageSize?: number;
   query?: string;
   verdict?: "all" | DomainAnalysis["verdict"];
+  status?: "all" | DomainAnalysis["status"];
   tld?: "all" | string;
+  source?: "all" | DomainAnalysis["source"];
   tagFilter?: string | null;
   onlyWatched?: boolean;
   showHidden?: boolean;
+  hideReviewed?: boolean;
+  minScore?: number;
+  maxScore?: number;
+  minDaysUntilExpiry?: number;
+  maxDaysUntilExpiry?: number;
+  domainLength?: "short" | "medium" | "long" | "all";
+  minDomainLength?: number;
+  maxDomainLength?: number;
+  minValue?: number;
+  maxValue?: number;
+  analysisStepMode?: "all" | "none" | "complete" | "has" | "missing";
+  analysisStep?: AnalysisCategory | null;
   sortKey?: QueueSortKey;
   sortDir?: SortDir;
   watchedSlugs?: string[];
   hiddenSlugs?: string[];
+  reviewedSlugs?: string[];
   notes?: SnapTldUserState["notes"];
 }
 
@@ -184,6 +194,46 @@ const defaultCategoryWeights: Record<AnalysisCategory, number> = {
   history: 10,
 };
 
+const categorySubAnalysisSpecs: Record<AnalysisCategory, Array<{
+  id: string;
+  label: string;
+  maxScore: number;
+  provider?: string;
+  requiresApiKey?: string;
+  runAsync?: boolean;
+}>> = {
+  structure: [
+    { id: "structure-local", label: "Lokal struktur", maxScore: 100 },
+  ],
+  lexical: [
+    { id: "lexicon-local", label: "Svenskt lexikon", maxScore: 100 },
+  ],
+  brand: [
+    { id: "brand-local", label: "Lokal brandbarhet", maxScore: 70 },
+    { id: "brand-ai", label: "AI-varumärkesbedömning", maxScore: 30, provider: "OpenAI", requiresApiKey: "openai" },
+  ],
+  market: [
+    { id: "market-local", label: "Lokal nischmatchning", maxScore: 60 },
+    { id: "market-ai", label: "AI-marknadsbedömning", maxScore: 40, provider: "OpenAI", requiresApiKey: "openai" },
+  ],
+  risk: [
+    { id: "risk-local", label: "Språkliga riskflaggor", maxScore: 50 },
+    { id: "risk-trademark", label: "Extern varumärkeskontroll", maxScore: 50, provider: "OpenAI", requiresApiKey: "openai" },
+  ],
+  salability: [
+    { id: "salability-local", label: "Lokal säljbarhet", maxScore: 60 },
+    { id: "salability-ai", label: "AI-köparanalys", maxScore: 40, provider: "OpenAI", requiresApiKey: "openai" },
+  ],
+  seo: [
+    { id: "seo-keyword-local", label: "Lokal keyword-relevans", maxScore: 35 },
+    { id: "seo-moz", label: "Moz DA/PA och backlinks", maxScore: 65, provider: "Moz", requiresApiKey: "moz" },
+  ],
+  history: [
+    { id: "history-whois", label: "WHOIS-ålder (RDAP)", maxScore: 50, runAsync: true },
+    { id: "history-wayback", label: "Wayback-snapshots", maxScore: 50, provider: "Wayback", requiresApiKey: "wayback" },
+  ],
+};
+
 const analysisStepOrder: AnalysisCategory[] = [
   "structure",
   "lexical",
@@ -238,6 +288,73 @@ function hashValue(value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function hasApiKey(settings: SnapTldSettings, key?: string) {
+  if (!key) return true;
+  return Boolean(settings.apiKeys[key]?.trim());
+}
+
+function buildSubAnalyses(category: AnalysisCategory, localScore: number, settings: SnapTldSettings): SubAnalysisResult[] {
+  return categorySubAnalysisSpecs[category].map((spec) => {
+    if (spec.runAsync) {
+      return {
+        id: spec.id,
+        label: spec.label,
+        status: "failed",
+        score: 0,
+        maxScore: spec.maxScore,
+        reason: "Väntar på RDAP-svar",
+      };
+    }
+
+    if (!spec.requiresApiKey) {
+      return {
+        id: spec.id,
+        label: spec.label,
+        status: "complete",
+        score: Math.round((localScore / 100) * spec.maxScore),
+        maxScore: spec.maxScore,
+      };
+    }
+
+    const missingKey = !hasApiKey(settings, spec.requiresApiKey);
+    return {
+      id: spec.id,
+      label: spec.label,
+      status: missingKey ? "blocked" : "failed",
+      score: 0,
+      maxScore: spec.maxScore,
+      provider: spec.provider,
+      requiresApiKey: spec.requiresApiKey,
+      reason: missingKey
+        ? `${spec.provider} API-nyckel saknas`
+        : `${spec.provider} API-integration är inte implementerad ännu`,
+    };
+  });
+}
+
+function scoreFromSubAnalyses(subAnalyses: SubAnalysisResult[]) {
+  return subAnalyses
+    .filter((item) => item.status === "complete")
+    .reduce((sum, item) => sum + item.score, 0);
+}
+
+function maxFromSubAnalyses(subAnalyses: SubAnalysisResult[]) {
+  return subAnalyses
+    .filter((item) => item.status === "complete")
+    .reduce((sum, item) => sum + item.maxScore, 0);
+}
+
+function coverageFromSubAnalyses(subAnalyses: SubAnalysisResult[]) {
+  const total = subAnalyses.reduce((sum, item) => sum + item.maxScore, 0);
+  const available = maxFromSubAnalyses(subAnalyses);
+  return total > 0 ? Math.round((available / total) * 100) : 0;
+}
+
+function coverageFromCategory(category: CategoryResult) {
+  if (category.subAnalyses?.length) return coverageFromSubAnalyses(category.subAnalyses);
+  return Math.max(0, Math.min(100, category.scoreMax ?? 0));
 }
 
 function buildCategorySignals(category: AnalysisCategory, domain: string, score: number): Signal[] {
@@ -393,7 +510,9 @@ function buildLexiconCategorySignals(category: AnalysisCategory, profile: Swedis
         { label: "Sökintent", value: profile.marketCategories.join(", ") || "Oklar", tone: profile.marketCategories.length > 0 ? "success" : "neutral" },
       ];
     case "history":
-      return buildCategorySignals(category, profile.label, score);
+      return [
+        { label: "WHOIS-ålder", value: "Hämtar RDAP...", tone: "neutral" as const },
+      ];
   }
 }
 
@@ -416,18 +535,156 @@ function buildLexiconCategoryVerdict(category: AnalysisCategory, score: number, 
     case "seo":
       return score >= 70 ? `${bare} har relevanta svenska keyword-signaler.${market}` : `${bare} har begränsade keyword-signaler i lexikonanalysen.`;
     case "history":
-      return buildCategoryVerdict(category, score, domain);
+      return `${domain.split(".")[0] ?? domain} — registreringsdatum hämtas via RDAP.`;
   }
 }
 
-function analyzeCategory(category: AnalysisCategory, domain: string, config: AnalysisConfig): CategoryResult {
+function analyzeCategory(category: AnalysisCategory, domain: string, config: AnalysisConfig, settings: SnapTldSettings): CategoryResult {
   const profile = analyzeSwedishDomain(domain);
-  const score = buildLexiconCategoryScore(category, profile);
+  const localScore = buildLexiconCategoryScore(category, profile);
+  const subAnalyses = buildSubAnalyses(category, localScore, settings);
+  const score = scoreFromSubAnalyses(subAnalyses);
+  const scoreMax = maxFromSubAnalyses(subAnalyses);
   return {
     score,
+    scoreMax,
     weight: config.weights[category],
-    signals: buildLexiconCategorySignals(category, profile, score),
-    verdict: buildLexiconCategoryVerdict(category, score, domain, profile),
+    signals: [
+      ...buildLexiconCategorySignals(category, profile, localScore),
+      ...subAnalyses
+        .filter((item) => item.status !== "complete")
+        .map((item): Signal => ({
+          label: item.label,
+          value: item.reason ?? "Ej körd",
+          tone: item.status === "failed" ? "danger" : "warning",
+        })),
+    ],
+    verdict: buildLexiconCategoryVerdict(category, localScore, domain, profile),
+    subAnalyses,
+  };
+}
+
+interface NormalizeCategoryOptions {
+  expandLegacySubAnalyses?: boolean;
+}
+
+function normalizeCategoryResult(
+  category: AnalysisCategory,
+  result: CategoryResult,
+  options: NormalizeCategoryOptions = { expandLegacySubAnalyses: true },
+): CategoryResult {
+  if (result.subAnalyses?.length) {
+    return {
+      ...result,
+      score: scoreFromSubAnalyses(result.subAnalyses),
+      scoreMax: maxFromSubAnalyses(result.subAnalyses),
+    };
+  }
+
+  if (result.score <= 0 && result.signals.length === 0 && !result.verdict) {
+    return { ...result, score: 0, scoreMax: 0, subAnalyses: [] };
+  }
+
+  const specs = categorySubAnalysisSpecs[category];
+  const localMax = specs.filter((spec) => !spec.requiresApiKey).reduce((sum, spec) => sum + spec.maxScore, 0);
+  if (!options.expandLegacySubAnalyses) {
+    return {
+      ...result,
+      score: Math.min(Math.round((clamp(result.score, 0, 100) / 100) * localMax), localMax),
+      scoreMax: localMax,
+      subAnalyses: [],
+    };
+  }
+
+  const subAnalyses: SubAnalysisResult[] = specs.map((spec) => {
+    if (!spec.requiresApiKey) {
+      return {
+        id: spec.id,
+        label: spec.label,
+        status: "complete",
+        score: Math.round((clamp(result.score, 0, 100) / 100) * spec.maxScore),
+        maxScore: spec.maxScore,
+      };
+    }
+    return {
+      id: spec.id,
+      label: spec.label,
+      status: "blocked",
+      score: 0,
+      maxScore: spec.maxScore,
+      provider: spec.provider,
+      requiresApiKey: spec.requiresApiKey,
+      reason: "Legacyanalys saknar verifierad API-körning",
+    };
+  });
+
+  return {
+    ...result,
+    score: Math.min(scoreFromSubAnalyses(subAnalyses), localMax),
+    scoreMax: localMax,
+    subAnalyses,
+  };
+}
+
+function normalizeCategories(categories: DomainAnalysis["categories"], options?: NormalizeCategoryOptions) {
+  return analysisStepOrder.reduce<Record<AnalysisCategory, CategoryResult>>((acc, key) => {
+    acc[key] = normalizeCategoryResult(key, categories[key], options);
+    return acc;
+  }, {} as Record<AnalysisCategory, CategoryResult>);
+}
+
+function scoreDomainFromCategories(categories: DomainAnalysis["categories"]) {
+  let weightedEarned = 0;
+  let weightedMax = 0;
+  let totalWeight = 0;
+
+  for (const key of analysisStepOrder) {
+    const result = categories[key];
+    totalWeight += result.weight;
+    weightedEarned += result.score * result.weight;
+    // Unanalyzed categories count against the full 100-point potential so that
+    // a domain scored on 2/8 steps cannot claim a high total score.
+    const effectiveMax = hasCategoryResult(result) ? (result.scoreMax ?? 100) : 100;
+    weightedMax += effectiveMax * result.weight;
+  }
+
+  return {
+    totalScore: totalWeight > 0 ? Math.round(weightedEarned / totalWeight) : 0,
+    scoreMax: totalWeight > 0 ? Math.round(weightedMax / totalWeight) : 0,
+  };
+}
+
+function withScoreEnvelope(domain: DomainAnalysis): DomainAnalysis {
+  const categories = normalizeCategories(domain.categories);
+  const { totalScore, scoreMax } = scoreDomainFromCategories(categories);
+  const rankScore = rankingScore({ totalScore, scoreMax });
+  return {
+    ...domain,
+    categories,
+    totalScore,
+    scoreMax,
+    coverage: scoreMax,
+    verdict: scoreToVerdict(rankScore, defaultAnalysisConfig),
+  };
+}
+
+function compactDomainAnalysis(domain: DomainAnalysis): DomainAnalysis {
+  return {
+    ...domain,
+    categories: analysisStepOrder.reduce<Record<AnalysisCategory, CategoryResult>>((acc, key) => {
+      const category = domain.categories[key];
+      acc[key] = {
+        score: category.score,
+        scoreMax: category.scoreMax,
+        weight: category.weight,
+        signals: [],
+        verdict: category.verdict,
+        subAnalyses: [],
+      };
+      return acc;
+    }, {} as Record<AnalysisCategory, CategoryResult>),
+    seo: { domainAuthority: 0, pageAuthority: 0, backlinks: 0, referringDomains: 0, spamScore: 0 },
+    wayback: { snapshots: 0, firstSeen: "", lastSeen: "", flags: [] },
   };
 }
 
@@ -446,76 +703,247 @@ function scoreToVerdict(score: number, config: AnalysisConfig) {
 }
 
 function hasCategoryResult(result: CategoryResult) {
-  return result.score > 0 || result.signals.length > 0 || Boolean(result.verdict);
+  return result.score > 0 || (result.scoreMax ?? 0) > 0 || result.signals.length > 0 || Boolean(result.verdict);
 }
 
-function analyzeDomain(domain: DomainAnalysis, requestedSteps: AnalysisStep[], config = defaultAnalysisConfig) {
-  const now = new Date().toISOString();
-  const normalizedSteps = normalizeAnalysisSteps(requestedSteps);
-  const steps = normalizedSteps.includes("overview")
-    ? (Object.keys(domain.categories) as AnalysisCategory[])
-    : normalizedSteps.filter((step): step is AnalysisCategory => step !== "overview");
+type AiCategory = keyof Omit<AiDomainAnalysis, "summary">;
+const AI_CATEGORY_SPEC_IDS: Record<AiCategory, string> = {
+  brand: "brand-ai",
+  market: "market-ai",
+  risk: "risk-trademark",
+  salability: "salability-ai",
+};
+const AI_CATEGORIES = Object.keys(AI_CATEGORY_SPEC_IDS) as AiCategory[];
 
-  const categories = { ...domain.categories };
+function applyAiCategoryResult(
+  result: CategoryResult,
+  subAnalysisId: string,
+  ai: AiDomainAnalysis[AiCategory],
+): CategoryResult {
+  const subAnalyses = (result.subAnalyses ?? []).map((sub) =>
+    sub.id === subAnalysisId ? { ...sub, status: "complete" as const, score: ai.score } : sub,
+  );
+  const aiSubLabel = result.subAnalyses?.find((sub) => sub.id === subAnalysisId)?.label ?? "";
+  const filteredSignals = result.signals.filter((sig) => sig.label !== aiSubLabel);
+  return {
+    ...result,
+    score: scoreFromSubAnalyses(subAnalyses),
+    scoreMax: maxFromSubAnalyses(subAnalyses),
+    signals: [...filteredSignals, ...ai.signals],
+    verdict: ai.verdict || result.verdict,
+    subAnalyses,
+  };
+}
+
+function applyWhoisResult(
+  result: CategoryResult,
+  whois: WhoisAgeResult,
+): CategoryResult {
+  const { createdAt, ageYears } = whois;
+  const score = whoisAgeScore(ageYears);
+  const subAnalyses = (result.subAnalyses ?? []).map((sub) =>
+    sub.id === "history-whois" ? { ...sub, status: "complete" as const, score } : sub,
+  );
+  const ageLabel =
+    ageYears >= 1 ? `${Math.floor(ageYears)} år` : `${Math.floor(ageYears * 12)} mån`;
+  const ageTone: Signal["tone"] =
+    ageYears >= 10 ? "success" : ageYears >= 3 ? "warning" : "danger";
+  const year = createdAt.slice(0, 4);
+  const verdict =
+    ageYears >= 10
+      ? `Domänen registrerades ${year} och är ${Math.floor(ageYears)} år gammal — stark ålderssignal.`
+      : ageYears >= 3
+        ? `Domänen registrerades ${year} — acceptabel ålder men inte veteran.`
+        : `Domänen är relativt ny (registrerad ${createdAt}) — begränsad ålderssignal.`;
+  return {
+    ...result,
+    score: scoreFromSubAnalyses(subAnalyses),
+    scoreMax: maxFromSubAnalyses(subAnalyses),
+    signals: [{ label: "Registrerat", value: `${createdAt} (${ageLabel})`, tone: ageTone }],
+    verdict,
+    subAnalyses,
+  };
+}
+
+function runLocalCategories(
+  domain: DomainAnalysis,
+  steps: AnalysisCategory[],
+  config: AnalysisConfig,
+  settings: SnapTldSettings,
+): Record<AnalysisCategory, CategoryResult> {
+  const categories = normalizeCategories(domain.categories);
   for (const step of steps) {
-    categories[step] = analyzeCategory(step, domain.domain, config);
+    categories[step] = analyzeCategory(step, domain.domain, config, settings);
   }
+  return categories;
+}
 
-  const scoredCategories = (Object.values(categories) as CategoryResult[]).filter(hasCategoryResult);
-  const weightedTotal = scoredCategories.reduce((sum, result) => sum + result.score * result.weight, 0);
-  const totalWeight = scoredCategories.reduce((sum, result) => sum + result.weight, 0);
-  const totalScore = totalWeight > 0 ? Math.round(weightedTotal / totalWeight) : 0;
+function buildAiContext(domain: DomainAnalysis, categories: Record<AnalysisCategory, CategoryResult>): AiAnalysisContext {
+  const whoisSub = categories["history"]?.subAnalyses?.find((s) => s.id === "history-whois" && s.status === "complete");
+  const registeredSignal = categories["history"]?.signals?.find((s) => s.label === "Registrerat");
+  const registeredAt = registeredSignal?.value.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+  const domainAgeYears = whoisSub && whoisSub.score > 0
+    ? whoisSub.score >= 50 ? 15
+      : whoisSub.score >= 43 ? 10
+      : whoisSub.score >= 35 ? 5
+      : whoisSub.score >= 25 ? 2
+      : whoisSub.score >= 15 ? 1
+      : 0.5
+    : undefined;
+  return {
+    tld: domain.tld,
+    expiresAt: domain.expiresAt,
+    source: domain.source,
+    localBrandScore: categories["brand"].score,
+    localMarketScore: categories["market"].score,
+    localRiskScore: categories["risk"].score,
+    localSalabilityScore: categories["salability"].score,
+    registeredAt,
+    domainAgeYears,
+  };
+}
 
+function applyAiResults(
+  categories: Record<AnalysisCategory, CategoryResult>,
+  aiSteps: AiCategory[],
+  aiResult: AiDomainAnalysis,
+): Record<AnalysisCategory, CategoryResult> {
+  for (const cat of aiSteps) {
+    categories[cat] = applyAiCategoryResult(categories[cat], AI_CATEGORY_SPEC_IDS[cat], aiResult[cat]);
+  }
+  return categories;
+}
+
+function finalizeDomain(
+  domain: DomainAnalysis,
+  categories: Record<AnalysisCategory, CategoryResult>,
+  config: AnalysisConfig,
+  aiSummaryText: string | null,
+): DomainAnalysis {
+  const now = new Date().toISOString();
+  const { totalScore, scoreMax } = scoreDomainFromCategories(categories);
+  const rankScore = rankingScore({ totalScore, scoreMax });
   const next: DomainAnalysis = {
     ...domain,
     fetchedAt: now,
     status: "analyzed",
     categories,
     totalScore,
-    verdict: scoreToVerdict(totalScore, config),
-    aiSummary: summarizeDomain({ ...domain, categories, totalScore, verdict: domain.verdict, fetchedAt: now, status: "analyzed" }),
+    scoreMax,
+    coverage: scoreMax,
+    verdict: scoreToVerdict(rankScore, config),
+    aiSummary: "",
     estimatedValue: {
       min: Math.max(0, totalScore * 120),
       max: Math.max(0, totalScore * 240),
       currency: "SEK",
     },
-    seo: steps.includes("seo")
-      ? {
-          domainAuthority: clamp(Math.round(totalScore / 3), 0, 100),
-          pageAuthority: clamp(Math.round(totalScore / 2.7), 0, 100),
-          backlinks: Math.max(0, totalScore * 8),
-          referringDomains: Math.max(0, Math.round(totalScore / 1.8)),
-          spamScore: clamp(Math.round((100 - totalScore) / 6), 0, 50),
-        }
-      : domain.seo,
-    wayback: steps.includes("history")
-      ? {
-          snapshots: Math.max(0, Math.round(totalScore / 5)),
-          firstSeen: domain.wayback.firstSeen || now.slice(0, 10),
-          lastSeen: now.slice(0, 10),
-          flags: totalScore >= 60 ? [] : ["kontrollera historik manuellt"],
-        }
-      : domain.wayback,
+    seo: domain.seo,
+    wayback: domain.wayback,
   };
-
-  next.aiSummary = summarizeDomain(next);
+  next.aiSummary = aiSummaryText ?? summarizeDomain(next);
   return next;
 }
 
-function toRawDomainAnalysis(domain: DomainAnalysis): RawDomainAnalysis {
-  return {
-    ...domain,
-    fetchedAt: domain.fetchedAt.replace("T", " ").replace(/:\d{2}(?:\.\d+)?Z$/, ""),
-    estimatedValue: `${domain.estimatedValue.min} – ${domain.estimatedValue.max} ${domain.estimatedValue.currency === "SEK" ? "kr" : "$"}`,
-  };
+function normalizeSteps(requestedSteps: AnalysisStep[]): AnalysisCategory[] {
+  const normalized = normalizeAnalysisSteps(requestedSteps);
+  return normalized.includes("overview")
+    ? [...analysisStepOrder]
+    : normalized.filter((s): s is AnalysisCategory => s !== "overview");
 }
 
-function toRawImportedDomain(domain: ImportedDomainRecord): RawImportedDomainRecord {
-  return {
-    ...domain,
-    importedAt: domain.importedAt.replace("T", " ").replace(/:\d{2}(?:\.\d+)?Z$/, ""),
-    estimatedValue: `${domain.estimatedValue.min} – ${domain.estimatedValue.max} ${domain.estimatedValue.currency === "SEK" ? "kr" : "$"}`,
-  };
+// Single domain — used for rerunAnalysis
+async function analyzeDomainAsync(
+  domain: DomainAnalysis,
+  requestedSteps: AnalysisStep[],
+  config = defaultAnalysisConfig,
+  settings = createDefaultSettings(),
+): Promise<DomainAnalysis> {
+  const steps = normalizeSteps(requestedSteps);
+  const categories = runLocalCategories(domain, steps, config, settings);
+
+  // WHOIS age (history step, no API key needed)
+  if (steps.includes("history")) {
+    const whoisResult = await fetchWhoisAge(domain.domain);
+    if (whoisResult) categories["history"] = applyWhoisResult(categories["history"], whoisResult);
+  }
+
+  const openaiKey = settings.apiKeys["openai"]?.trim();
+  const aiSteps = steps.filter((s): s is AiCategory => AI_CATEGORIES.includes(s as AiCategory));
+  let aiSummaryText: string | null = null;
+
+  if (openaiKey && aiSteps.length > 0) {
+    const profile = analyzeSwedishDomain(domain.domain);
+    const aiResult = await runOpenAiAnalysis(domain.domain, profile, openaiKey, buildAiContext(domain, categories));
+    if (aiResult) {
+      applyAiResults(categories, aiSteps, aiResult);
+      if (aiResult.summary) aiSummaryText = aiResult.summary;
+    }
+  }
+
+  return finalizeDomain(domain, categories, config, aiSummaryText);
+}
+
+// Multiple domains with batched AI calls (max 10 per request) — used for analyzeQueue and importDomains
+async function analyzeDomainsAsync(
+  domains: DomainAnalysis[],
+  requestedSteps: AnalysisStep[],
+  config = defaultAnalysisConfig,
+  settings = createDefaultSettings(),
+): Promise<DomainAnalysis[]> {
+  if (domains.length === 0) return [];
+
+  const steps = normalizeSteps(requestedSteps);
+  const aiSteps = steps.filter((s): s is AiCategory => AI_CATEGORIES.includes(s as AiCategory));
+  const openaiKey = settings.apiKeys["openai"]?.trim();
+
+  // 1. Local analysis for all domains
+  const localResults = domains.map((domain) => ({
+    domain,
+    categories: runLocalCategories(domain, steps, config, settings),
+  }));
+
+  // 2. WHOIS age fetches (history step, parallel, no API key needed)
+  if (steps.includes("history")) {
+    const whoisResults = await Promise.all(
+      localResults.map(async ({ domain }) => ({
+        domainName: domain.domain,
+        result: await fetchWhoisAge(domain.domain),
+      })),
+    );
+    for (const { domainName, result } of whoisResults) {
+      if (!result) continue;
+      const entry = localResults.find((r) => r.domain.domain === domainName);
+      if (entry) entry.categories["history"] = applyWhoisResult(entry.categories["history"], result);
+    }
+  }
+
+  // 3. Batch AI calls (max 10 per request)
+  const aiResultMap = new Map<string, AiDomainAnalysis>();
+  if (openaiKey && aiSteps.length > 0) {
+    const batchItems: AiBatchItem[] = localResults.map(({ domain, categories }) => ({
+      domain: domain.domain,
+      profile: analyzeSwedishDomain(domain.domain),
+      ctx: buildAiContext(domain, categories),
+    }));
+
+    for (let i = 0; i < batchItems.length; i += 10) {
+      const batch = batchItems.slice(i, i + 10);
+      const batchResults = await runOpenAiAnalysisBatch(batch, openaiKey);
+      batchResults.forEach((result, domainName) => aiResultMap.set(domainName, result));
+    }
+  }
+
+  // 4. Apply AI results and finalize
+  return localResults.map(({ domain, categories }) => {
+    const aiResult = aiResultMap.get(domain.domain) ?? null;
+    let aiSummaryText: string | null = null;
+    if (aiResult) {
+      applyAiResults(categories, aiSteps, aiResult);
+      if (aiResult.summary) aiSummaryText = aiResult.summary;
+    }
+    return finalizeDomain(domain, categories, config, aiSummaryText);
+  });
 }
 
 function parseLooseDateTime(value: string, fallback = new Date()) {
@@ -554,8 +982,12 @@ function mapStateRow(row: PrismaStateRow): SnapTldUserState {
   };
 }
 
-function mapPrismaDomainAnalysis(row: PrismaDomainAnalysisRow): DomainAnalysis {
+function mapPrismaDomainAnalysis(row: PrismaDomainAnalysisRow, options?: NormalizeCategoryOptions): DomainAnalysis {
   const fallback = buildQueuedAnalysis(row.domain, row.source as DomainAnalysis["source"], row.expiresAt);
+  const categories = normalizeCategories(parseJson(row.categoriesJson, fallback.categories), options);
+  const { totalScore, scoreMax } = scoreDomainFromCategories(categories);
+  const rankScore = rankingScore({ totalScore, scoreMax });
+  const status = normalizeAnalysisStatus(row.status as DomainAnalysis["status"], categories);
   return {
     id: row.slug,
     slug: row.slug,
@@ -564,18 +996,50 @@ function mapPrismaDomainAnalysis(row: PrismaDomainAnalysisRow): DomainAnalysis {
     source: row.source as DomainAnalysis["source"],
     fetchedAt: row.fetchedAt.toISOString(),
     expiresAt: row.expiresAt,
-    totalScore: row.totalScore,
-    verdict: row.verdict as DomainAnalysis["verdict"],
-    status: row.status as DomainAnalysis["status"],
+    totalScore,
+    scoreMax,
+    coverage: scoreMax,
+    verdict: status === "analyzed" ? scoreToVerdict(rankScore, defaultAnalysisConfig) : (row.verdict as DomainAnalysis["verdict"]),
+    status,
     aiSummary: row.aiSummary,
     estimatedValue: {
       min: row.estimatedValueMin,
       max: row.estimatedValueMax,
       currency: row.estimatedValueCurrency as DomainAnalysis["estimatedValue"]["currency"],
     },
-    categories: parseJson(row.categoriesJson, fallback.categories),
+    categories,
     seo: parseJson(row.seoJson, fallback.seo),
     wayback: parseJson(row.waybackJson, fallback.wayback),
+  };
+}
+
+function mapPrismaDomainAnalysisSummary(row: PrismaDomainAnalysisSummaryRow, options?: NormalizeCategoryOptions): DomainAnalysis {
+  const fallback = buildQueuedAnalysis(row.domain, row.source as DomainAnalysis["source"], row.expiresAt);
+  const categories = normalizeCategories(parseJson(row.categoriesJson, fallback.categories), options);
+  const { totalScore, scoreMax } = scoreDomainFromCategories(categories);
+  const rankScore = rankingScore({ totalScore, scoreMax });
+  return {
+    id: row.slug,
+    slug: row.slug,
+    domain: row.domain,
+    tld: row.tld,
+    source: row.source as DomainAnalysis["source"],
+    fetchedAt: row.fetchedAt.toISOString(),
+    expiresAt: row.expiresAt,
+    totalScore,
+    scoreMax,
+    coverage: scoreMax,
+    verdict: scoreToVerdict(rankScore, defaultAnalysisConfig),
+    status: normalizeAnalysisStatus(row.status as DomainAnalysis["status"], categories),
+    aiSummary: row.aiSummary,
+    estimatedValue: {
+      min: row.estimatedValueMin,
+      max: row.estimatedValueMax,
+      currency: row.estimatedValueCurrency as DomainAnalysis["estimatedValue"]["currency"],
+    },
+    categories,
+    seo: fallback.seo,
+    wayback: fallback.wayback,
   };
 }
 
@@ -620,15 +1084,53 @@ function getAnalysisSteps(categories: DomainAnalysis["categories"]) {
   });
 }
 
+function hasAnalysisSteps(categories: DomainAnalysis["categories"]) {
+  return getAnalysisSteps(categories).length > 0;
+}
+
+function normalizeAnalysisStatus(status: DomainAnalysis["status"], categories: DomainAnalysis["categories"]): DomainAnalysis["status"] {
+  return status === "analyzed" && !hasAnalysisSteps(categories) ? "queued" : status;
+}
+
+function reconcileImportedStatus(
+  recordStatus: ImportedDomainRecord["status"],
+  analysisStatus?: DomainAnalysis["status"],
+): ImportedDomainRecord["status"] {
+  if (recordStatus === "analyzed") return analysisStatus ?? "queued";
+  if (recordStatus === "queued" && analysisStatus === "analyzed") return "analyzed";
+  return recordStatus;
+}
+
 function withAnalysisSteps(
   records: ImportedDomainRecord[],
-  analyses: Array<Pick<DomainAnalysis, "slug" | "categories">>,
+  analyses: Array<Pick<DomainAnalysis, "slug" | "status" | "categories" | "totalScore" | "scoreMax" | "coverage" | "verdict" | "estimatedValue">>,
 ) {
-  const stepsBySlug = new Map(analyses.map((analysis) => [analysis.slug, getAnalysisSteps(analysis.categories)] as const));
-  return records.map((record) => ({
-    ...record,
-    analysisSteps: stepsBySlug.get(record.slug) ?? [],
-  }));
+  const analysisBySlug = new Map(analyses.map((analysis) => [analysis.slug, analysis] as const));
+  return records.map((record) => {
+    const analysis = analysisBySlug.get(record.slug);
+    const analysisSteps = analysis ? getAnalysisSteps(analysis.categories) : [];
+    const analysisCoverage = analysis
+      ? analysisStepOrder.reduce<NonNullable<ImportedDomainRecord["analysisCoverage"]>>((acc, key) => {
+          acc[key] = coverageFromCategory(analysis.categories[key]);
+          return acc;
+        }, {})
+      : undefined;
+    const analysisStatus = analysis
+      ? normalizeAnalysisStatus(analysis.status, analysis.categories)
+      : undefined;
+
+    return {
+      ...record,
+      status: reconcileImportedStatus(record.status, analysisStatus),
+      totalScore: analysis?.totalScore ?? record.totalScore,
+      scoreMax: analysis?.scoreMax ?? record.scoreMax,
+      coverage: analysis?.coverage ?? record.coverage,
+      verdict: analysis?.verdict ?? record.verdict,
+      estimatedValue: analysis?.estimatedValue ?? record.estimatedValue,
+      analysisSteps,
+      analysisCoverage,
+    };
+  });
 }
 
 function normalizePage(page?: number) {
@@ -640,9 +1142,9 @@ function normalizePageSize(pageSize?: number, fallback = 50, max = 200) {
   return Math.max(1, Math.min(max, value));
 }
 
-function paginate<T>(items: T[], page?: number, pageSize?: number): PaginatedResult<T> {
+function paginate<T>(items: T[], page?: number, pageSize?: number, maxPageSize = 200): PaginatedResult<T> {
   const normalizedPage = normalizePage(page);
-  const normalizedPageSize = normalizePageSize(pageSize);
+  const normalizedPageSize = normalizePageSize(pageSize, 50, maxPageSize);
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / normalizedPageSize));
   const clampedPage = Math.min(normalizedPage, totalPages);
@@ -670,9 +1172,11 @@ function sortDomains(domains: DomainAnalysis[], sortKey: QueueSortKey = "score",
         return a.source.localeCompare(b.source) * dir;
       case "value":
         return (a.estimatedValue.min - b.estimatedValue.min) * dir;
+      case "analysis":
+        return (getAnalysisSteps(a.categories).length - getAnalysisSteps(b.categories).length) * dir;
       case "score":
       default:
-        return (a.totalScore - b.totalScore) * dir;
+        return (rankingScore(a) - rankingScore(b)) * dir;
     }
   });
 }
@@ -681,6 +1185,7 @@ function filterDomains(domains: DomainAnalysis[], input: DomainPageQuery) {
   const query = input.query?.trim().toLowerCase() ?? "";
   const watched = new Set(input.watchedSlugs ?? []);
   const hidden = new Set(input.hiddenSlugs ?? []);
+  const reviewed = new Set(input.reviewedSlugs ?? []);
   const tagged =
     input.tagFilter && input.notes
       ? new Set(Object.entries(input.notes).filter(([, note]) => note.tags.includes(input.tagFilter as string)).map(([slug]) => slug))
@@ -688,13 +1193,45 @@ function filterDomains(domains: DomainAnalysis[], input: DomainPageQuery) {
 
   return domains.filter((domain) => {
     if (input.verdict && input.verdict !== "all" && domain.verdict !== input.verdict) return false;
+    if (input.status && input.status !== "all" && domain.status !== input.status) return false;
     if (input.tld && input.tld !== "all" && domain.tld !== input.tld) return false;
+    if (input.source && input.source !== "all" && domain.source !== input.source) return false;
     if (tagged && !tagged.has(domain.slug)) return false;
     if (input.onlyWatched && !watched.has(domain.slug)) return false;
+    if (input.hideReviewed && reviewed.has(domain.slug)) return false;
 
     const isHidden = hidden.has(domain.slug);
     if (isHidden && !input.showHidden) return false;
     if (!isHidden && input.showHidden) return false;
+
+    const score = rankingScore(domain);
+    if (input.minScore !== undefined && input.minScore > 0 && score < input.minScore) return false;
+    if (input.maxScore !== undefined && input.maxScore > 0 && score > input.maxScore) return false;
+
+    if (input.minDaysUntilExpiry !== undefined || input.maxDaysUntilExpiry !== undefined) {
+      const daysUntil = Math.ceil((new Date(domain.expiresAt).getTime() - Date.now()) / 86_400_000);
+      if (input.minDaysUntilExpiry !== undefined && input.minDaysUntilExpiry >= 0 && daysUntil < input.minDaysUntilExpiry) return false;
+      if (input.maxDaysUntilExpiry !== undefined && input.maxDaysUntilExpiry >= 0 && daysUntil > input.maxDaysUntilExpiry) return false;
+    }
+
+    const labelLen = (domain.domain.split(".")[0] ?? domain.domain).length;
+    if (input.domainLength && input.domainLength !== "all") {
+      if (input.domainLength === "short" && labelLen > 7) return false;
+      if (input.domainLength === "medium" && (labelLen < 8 || labelLen > 12)) return false;
+      if (input.domainLength === "long" && labelLen < 13) return false;
+    }
+    if (input.minDomainLength !== undefined && input.minDomainLength > 0 && labelLen < input.minDomainLength) return false;
+    if (input.maxDomainLength !== undefined && input.maxDomainLength > 0 && labelLen > input.maxDomainLength) return false;
+
+    if (input.minValue !== undefined && input.minValue > 0 && domain.estimatedValue.max < input.minValue) return false;
+    if (input.maxValue !== undefined && input.maxValue > 0 && domain.estimatedValue.min > input.maxValue) return false;
+
+    const analysisSteps = getAnalysisSteps(domain.categories);
+    const analysisStepSet = new Set(analysisSteps);
+    if (input.analysisStepMode === "none" && analysisSteps.length > 0) return false;
+    if (input.analysisStepMode === "complete" && analysisSteps.length < analysisStepOrder.length) return false;
+    if (input.analysisStepMode === "has" && (!input.analysisStep || !analysisStepSet.has(input.analysisStep))) return false;
+    if (input.analysisStepMode === "missing" && (!input.analysisStep || analysisStepSet.has(input.analysisStep))) return false;
 
     if (query && !domain.domain.toLowerCase().includes(query) && !domain.source.toLowerCase().includes(query)) return false;
     return true;
@@ -702,9 +1239,25 @@ function filterDomains(domains: DomainAnalysis[], input: DomainPageQuery) {
 }
 
 function getQueueMeta(domains: DomainAnalysis[]): QueuePageMeta {
+  const scores = domains.map((domain) => rankingScore(domain));
+  const lengths = domains.map((domain) => (domain.domain.split(".")[0] ?? domain.domain).length);
+  const values = domains.flatMap((domain) => [domain.estimatedValue.min, domain.estimatedValue.max]);
   return {
     totalDomains: domains.length,
     uniqueTlds: Array.from(new Set(domains.map((domain) => domain.tld))).sort(),
+    uniqueSources: Array.from(new Set(domains.map((domain) => domain.source))).sort() as DomainAnalysis["source"][],
+    scoreRange: {
+      min: scores.length > 0 ? Math.min(...scores) : 0,
+      max: scores.length > 0 ? Math.max(...scores) : 0,
+    },
+    labelLengthRange: {
+      min: lengths.length > 0 ? Math.min(...lengths) : 0,
+      max: lengths.length > 0 ? Math.max(...lengths) : 0,
+    },
+    valueRange: {
+      min: values.length > 0 ? Math.min(...values) : 0,
+      max: values.length > 0 ? Math.max(...values) : 0,
+    },
   };
 }
 
@@ -725,7 +1278,7 @@ function sortImportedDomains(
       case "expiresAt":
         return a.expiresAt.localeCompare(b.expiresAt) * dir;
       case "score":
-        return (a.totalScore - b.totalScore) * dir;
+        return (rankingScore(a) - rankingScore(b)) * dir;
       case "verdict":
         return a.verdict.localeCompare(b.verdict) * dir;
       case "importedAt":
@@ -769,6 +1322,121 @@ function getImportedMeta(domains: ImportedDomainRecord[]): ImportedDomainsMeta {
   };
 }
 
+async function getPrismaImportedMeta(): Promise<ImportedDomainsMeta> {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const [totalDomains, importedToday, analyses, batchRows, tldRows, sourceRows] = await Promise.all([
+    prisma.snapTldImportedDomain.count(),
+    prisma.snapTldImportedDomain.count({ where: { importedAt: { gte: start, lt: end } } }),
+    getPrismaDomainSummaries(),
+    prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>("select count(distinct batchId) as count from SnapTldImportedDomain"),
+    prisma.snapTldImportedDomain.findMany({ distinct: ["tld"], select: { tld: true }, orderBy: { tld: "asc" } }),
+    prisma.snapTldImportedDomain.findMany({
+      distinct: ["source", "sourceLabel"],
+      select: { source: true, sourceLabel: true },
+      orderBy: { sourceLabel: "asc" },
+    }),
+  ]);
+
+  const uniqueBatches = Number(batchRows[0]?.count ?? 0);
+  return {
+    totalDomains,
+    importedToday,
+    analyzed: analyses.filter((domain) => domain.status === "analyzed").length,
+    running: analyses.filter((domain) => domain.status === "running").length,
+    uniqueBatches,
+    uniqueTlds: tldRows.map((row) => row.tld),
+    uniqueSources: sourceRows.map((row) => ({ id: row.source as ImportedDomainRecord["source"], label: row.sourceLabel })),
+  };
+}
+
+function canUseFastImportedPage(query: ImportedPageQuery) {
+  const hasQuery = Boolean(query.query?.trim());
+  const hasStatus = Boolean(query.status && query.status !== "all");
+  const hasSource = Boolean(query.source && query.source !== "all");
+  const hasTld = Boolean(query.tld && query.tld !== "all");
+  const sortKey = query.sortKey ?? "importedAt";
+  return !hasQuery && !hasStatus && !hasSource && !hasTld && sortKey === "importedAt";
+}
+
+function canUseFastDomainPage(query: DomainPageQuery) {
+  const sortKey = query.sortKey ?? "score";
+  return (
+    sortKey !== "score" &&
+    sortKey !== "verdict" &&
+    (!query.verdict || query.verdict === "all") &&
+    !query.tagFilter &&
+    !query.onlyWatched &&
+    !query.showHidden &&
+    (query.hiddenSlugs?.length ?? 0) === 0
+  );
+}
+
+function buildPrismaDomainWhere(query: DomainPageQuery) {
+  const where: Record<string, unknown> = {};
+  const text = query.query?.trim();
+  if (text) {
+    where.OR = [
+      { domain: { contains: text } },
+      { source: { contains: text } },
+    ];
+  }
+  if (query.verdict && query.verdict !== "all") where.verdict = query.verdict;
+  if (query.tld && query.tld !== "all") where.tld = query.tld;
+  return where;
+}
+
+function buildPrismaDomainOrderBy(query: DomainPageQuery) {
+  const direction = query.sortDir === "asc" ? "asc" : "desc";
+  switch (query.sortKey ?? "score") {
+    case "domain":
+      return { domain: direction } as const;
+    case "verdict":
+      return { verdict: direction } as const;
+    case "expires":
+      return { expiresAt: direction } as const;
+    case "source":
+      return { source: direction } as const;
+    case "value":
+      return { estimatedValueMin: direction } as const;
+    case "score":
+    default:
+      return { totalScore: direction } as const;
+  }
+}
+
+const domainAnalysisSummarySelect = {
+  slug: true,
+  domain: true,
+  tld: true,
+  source: true,
+  fetchedAt: true,
+  expiresAt: true,
+  status: true,
+  aiSummary: true,
+  estimatedValueMin: true,
+  estimatedValueMax: true,
+  estimatedValueCurrency: true,
+  categoriesJson: true,
+} as const;
+
+let domainSummaryCache: { expiresAt: number; domains: DomainAnalysis[] } | null = null;
+
+function clearDomainSummaryCache() {
+  domainSummaryCache = null;
+}
+
+async function getPrismaDomainSummaries() {
+  const now = Date.now();
+  if (domainSummaryCache && domainSummaryCache.expiresAt > now) return domainSummaryCache.domains;
+
+  const dbRows = await prisma.snapTldDomainAnalysis.findMany({ select: domainAnalysisSummarySelect });
+  const domains = dbRows.map((row) => mapPrismaDomainAnalysisSummary(row, { expandLegacySubAnalyses: false }));
+  domainSummaryCache = { expiresAt: now + 5_000, domains };
+  return domains;
+}
+
 async function runFeeds(repository: Pick<SnapTldRepository, "listFeeds" | "importDomains">, feedIds?: string[]): Promise<RunFeedsResult> {
   const feeds = (await repository.listFeeds()).filter((feed) => {
     if (feedIds && !feedIds.includes(feed.id)) return false;
@@ -792,9 +1460,10 @@ async function runFeeds(repository: Pick<SnapTldRepository, "listFeeds" | "impor
   return { feeds: feeds.length, imported, duplicates };
 }
 
-function buildOverviewSeries(rows: { totalScore: number; updatedAt: Date }[]) {
-  if (rows.length === 0) return { scoreTrend: [], volumePerDay: [] };
-
+function buildOverviewSeries(
+  analysisRows: { totalScore: number; updatedAt: Date }[],
+  importedRows: { importedAt: Date }[],
+) {
   const formatter = new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short" });
   const today = new Date();
   const days = Array.from({ length: 8 }, (_, index) => {
@@ -802,13 +1471,19 @@ function buildOverviewSeries(rows: { totalScore: number; updatedAt: Date }[]) {
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - (7 - index));
     const key = date.toISOString().slice(0, 10);
-    return { key, label: formatter.format(date).replace(".", ""), scores: [] as number[] };
+    return { key, label: formatter.format(date).replace(".", ""), scores: [] as number[], imported: 0 };
   });
   const byKey = new Map(days.map((day) => [day.key, day]));
 
-  rows.forEach((row) => {
+  analysisRows.forEach((row) => {
     const key = row.updatedAt.toISOString().slice(0, 10);
     byKey.get(key)?.scores.push(row.totalScore);
+  });
+
+  importedRows.forEach((row) => {
+    const key = row.importedAt.toISOString().slice(0, 10);
+    const day = byKey.get(key);
+    if (day) day.imported++;
   });
 
   const scoredDays = days.filter((day) => day.scores.length > 0);
@@ -820,6 +1495,10 @@ function buildOverviewSeries(rows: { totalScore: number; updatedAt: Date }[]) {
     volumePerDay: scoredDays.map((day) => ({
       label: day.label,
       value: day.scores.length,
+    })),
+    importedPerDay: days.map((day) => ({
+      label: day.label,
+      value: day.imported,
     })),
   };
 }
@@ -834,7 +1513,7 @@ function normalizeAnalyzeQueueInput(input: AnalyzeQueueInput) {
   };
 }
 
-function sortQueueCandidates<T extends { domain: string; importedAt?: string; expiresAt: string; totalScore: number }>(
+function sortQueueCandidates<T extends { domain: string; importedAt?: string; expiresAt: string; totalScore: number; scoreMax?: number }>(
   candidates: T[],
   sortBy: AnalyzeQueueInput["sortBy"] = "oldest-imported",
 ) {
@@ -848,7 +1527,7 @@ function sortQueueCandidates<T extends { domain: string; importedAt?: string; ex
         return a.expiresAt.localeCompare(b.expiresAt);
       case "highest-score":
       case "lowest-score":
-        return (a.totalScore - b.totalScore) * direction;
+        return (rankingScore(a) - rankingScore(b)) * direction;
       case "domain":
         return a.domain.localeCompare(b.domain, "sv");
       default:
@@ -866,7 +1545,8 @@ export interface SnapTldRepository {
   listFeeds(): Promise<FeedSource[]>;
   listReports(): Promise<Report[]>;
   getReportById(reportId: string): Promise<Report | null>;
-  getOverviewSeries(): Promise<{ scoreTrend: { label: string; value: number }[]; volumePerDay: { label: string; value: number }[] }>;
+  getOverviewStats(): Promise<OverviewStats>;
+  getOverviewSeries(): Promise<{ scoreTrend: { label: string; value: number }[]; volumePerDay: { label: string; value: number }[]; importedPerDay: { label: string; value: number }[] }>;
   getUserState(): Promise<SnapTldUserState>;
   toggleWatch(slug: string): Promise<string[]>;
   addWatchMany(slugs: string[]): Promise<string[]>;
@@ -886,318 +1566,6 @@ export interface SnapTldRepository {
   runFeed(feedId: string): Promise<RunFeedsResult>;
   runActiveFeeds(): Promise<RunFeedsResult>;
   createReport(input: CreateReportInput): Promise<Report>;
-}
-
-class MockSnapTldRepository implements SnapTldRepository {
-  async listDomains() {
-    const bySlug = new Map(rawDomains.map((entry) => [entry.slug, entry]));
-    getDomainOverrides().forEach((entry) => bySlug.set(entry.slug, entry));
-    return [...bySlug.values()].map(mapRawDomainAnalysis);
-  }
-
-  async listDomainPage(query: DomainPageQuery = {}) {
-    const domains = await this.listDomains();
-    return {
-      ...paginate(sortDomains(filterDomains(domains, query), query.sortKey, query.sortDir), query.page, query.pageSize),
-      meta: getQueueMeta(domains),
-    };
-  }
-
-  async getDomainBySlug(slug: string) {
-    return (await this.listDomains()).find((entry) => entry.slug === slug) ?? null;
-  }
-
-  async listImportedDomains() {
-    const bySlug = new Map(rawImportedDomains.map((entry) => [entry.slug, entry]));
-    getImportedDomainOverrides().forEach((entry) => bySlug.set(entry.slug, entry));
-    return withAnalysisSteps([...bySlug.values()].map(mapRawImportedDomain), await this.listDomains());
-  }
-
-  async listImportedDomainPage(query: ImportedPageQuery = {}) {
-    const domains = await this.listImportedDomains();
-    return {
-      ...paginate(
-        sortImportedDomains(filterImportedDomains(domains, query), query.sortKey, query.sortDir),
-        query.page,
-        query.pageSize,
-      ),
-      meta: getImportedMeta(domains),
-    };
-  }
-
-  async listFeeds() {
-    return rawFeeds.map(mapRawFeed).map((feed) => {
-      const override = getFeedOverride(feed.id);
-      if (!override) return feed;
-      return {
-        ...feed,
-        status: override.status ?? feed.status,
-        schedule: override.schedule ?? feed.schedule,
-      };
-    });
-  }
-
-  async listReports() {
-    return [...getReportOverrides(), ...rawReports.map(mapRawReport)];
-  }
-
-  async getReportById(reportId: string) {
-    return (await this.listReports()).find((report) => report.id === reportId) ?? null;
-  }
-
-  async getOverviewSeries() {
-    return { scoreTrend, volumePerDay };
-  }
-
-  async getUserState() {
-    return getMockUserState();
-  }
-
-  async toggleWatch(slug: string) {
-    return toggleMockListValue("watchlist", slug);
-  }
-
-  async addWatchMany(slugs: string[]) {
-    return addMockListValues("watchlist", slugs);
-  }
-
-  async toggleReviewed(slug: string) {
-    return toggleMockListValue("reviewed", slug);
-  }
-
-  async addReviewedMany(slugs: string[]) {
-    return addMockListValues("reviewed", slugs);
-  }
-
-  async toggleHidden(slug: string) {
-    return toggleMockListValue("hidden", slug);
-  }
-
-  async addHiddenMany(slugs: string[]) {
-    return addMockListValues("hidden", slugs);
-  }
-
-  async saveNote(slug: string, note: DomainNote | null) {
-    return saveMockNote(slug, note);
-  }
-
-  async saveWeights(yaml: string) {
-    return saveMockWeights(yaml);
-  }
-
-  async resetWeights() {
-    return resetMockWeights();
-  }
-
-  async saveSettings(settings: SnapTldSettings) {
-    return saveMockSettings(settings);
-  }
-
-  async importDomains(input: ImportDomainsInput) {
-    const batchId = `imp-${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}`;
-    let importedDomains: ImportedDomainRecord[] = [];
-    const existingImportedSlugs = new Set((await this.listImportedDomains()).map((entry) => entry.slug));
-    const existingAnalysisSlugs = new Set((await this.listDomains()).map((entry) => entry.slug));
-    let duplicateCount = input.duplicates.length;
-
-    if (input.mode === "url" && input.url) {
-      const feedUrl = normalizeImportUrl(input.url);
-      const response = await fetch(feedUrl, { cache: "no-store" });
-      if (!response.ok) throw new Error(`Kunde inte hämta feed (${response.status})`);
-      const payload = (await response.json()) as { data?: Array<{ name?: string; release_at?: string }> };
-      importedDomains = (payload.data ?? [])
-        .filter((entry): entry is { name: string; release_at: string } => !!entry.name && !!entry.release_at)
-        .map((entry) => {
-          const domain = buildQueuedAnalysis(entry.name.toLowerCase(), "internetstiftelsen", entry.release_at);
-          return {
-            id: domain.id,
-            slug: domain.slug,
-            domain: domain.domain,
-            tld: domain.tld,
-            source: domain.source,
-            sourceLabel: sourceLabelFromInput("url", feedUrl),
-            importedAt: new Date().toISOString(),
-            importedBy: "URL-import",
-            batchId,
-            status: "queued",
-            expiresAt: entry.release_at,
-            totalScore: 0,
-            verdict: "mediocre",
-            estimatedValue: { min: 0, max: 0, currency: "SEK" },
-          };
-        });
-    } else {
-      importedDomains = input.validDomains.map((domainName) => {
-        const source = sourceFromImportMode(input.mode);
-        const domain = buildQueuedAnalysis(domainName.toLowerCase(), source, new Date().toISOString().slice(0, 10));
-        return {
-          id: domain.id,
-          slug: domain.slug,
-          domain: domain.domain,
-          tld: domain.tld,
-          source,
-          sourceLabel: sourceLabelFromInput(input.mode),
-          importedAt: new Date().toISOString(),
-          importedBy: "SnapTLD Admin",
-          batchId,
-          status: "queued",
-          expiresAt: domain.expiresAt,
-          totalScore: 0,
-          verdict: "mediocre",
-          estimatedValue: { min: 0, max: 0, currency: "SEK" },
-        };
-      });
-    }
-
-    const newImportedDomains = importedDomains.filter((entry) => {
-      if (existingImportedSlugs.has(entry.slug)) {
-        duplicateCount += 1;
-        return false;
-      }
-      existingImportedSlugs.add(entry.slug);
-      return true;
-    });
-
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
-    const domainAnalyses =
-      input.selectedSteps.length > 0
-        ? newImportedDomains.map((entry) =>
-            analyzeDomain(
-              buildQueuedAnalysis(entry.domain, entry.source, entry.expiresAt),
-              input.selectedSteps,
-              config,
-            ),
-          )
-        : newImportedDomains
-            .filter((entry) => !existingAnalysisSlugs.has(entry.slug))
-            .map((entry) => buildQueuedAnalysis(entry.domain, entry.source, entry.expiresAt));
-
-    const importedDomainRecords = newImportedDomains.map((entry) => ({
-      ...entry,
-      status: input.selectedSteps.length > 0 ? ("analyzed" as const) : entry.status,
-      totalScore: domainAnalyses.find((analysis) => analysis.slug === entry.slug)?.totalScore ?? entry.totalScore,
-      verdict: domainAnalyses.find((analysis) => analysis.slug === entry.slug)?.verdict ?? entry.verdict,
-      estimatedValue: domainAnalyses.find((analysis) => analysis.slug === entry.slug)?.estimatedValue ?? entry.estimatedValue,
-    }));
-
-    if (importedDomainRecords.length > 0) {
-      appendImportedDomains(importedDomainRecords.map(toRawImportedDomain));
-    }
-    if (domainAnalyses.length > 0) {
-      appendDomainAnalyses(domainAnalyses.map(toRawDomainAnalysis));
-    }
-
-    return {
-      imported: newImportedDomains.length,
-      duplicates: duplicateCount,
-    };
-  }
-
-  async rerunAnalysis(slug: string, step = "overview") {
-    const domain = await this.getDomainBySlug(slug);
-    if (!domain) throw new Error("Domän hittades inte");
-
-    if (step !== "overview" && !isAnalysisCategory(step)) throw new Error("Ogiltigt analyssteg");
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
-    const next = analyzeDomain(domain, [step as AnalysisStep], config);
-    upsertDomainAnalysis(toRawDomainAnalysis(next));
-
-    const imported = (await this.listImportedDomains()).find((entry) => entry.slug === slug);
-    if (imported) {
-      upsertImportedDomain(
-        toRawImportedDomain({
-          ...imported,
-          status: next.status,
-          totalScore: next.totalScore,
-          verdict: next.verdict,
-          estimatedValue: next.estimatedValue,
-        }),
-      );
-    }
-
-    return { analyzed: true };
-  }
-
-  async analyzeQueue(input: AnalyzeQueueInput) {
-    const options = normalizeAnalyzeQueueInput(input);
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
-    const domains = await this.listDomains();
-    const importedBySlug = new Map((await this.listImportedDomains()).map((entry) => [entry.slug, entry] as const));
-    const candidates = domains.filter((domain) => {
-      const imported = importedBySlug.get(domain.slug);
-      if (options.scope === "selected" && !(options.slugs ?? []).includes(domain.slug)) return false;
-      if (options.scope === "queued" && domain.status !== "queued") return false;
-      if (options.scope === "not-analyzed" && domain.status === "analyzed") return false;
-      if (options.scope === "missing-step" && (!options.missingStep || getAnalysisSteps(domain.categories).includes(options.missingStep))) return false;
-      if (options.dateFilter && imported) {
-        const importedDate = imported.importedAt.slice(0, 10);
-        if (options.dateFilter.direction === "before" && importedDate >= options.dateFilter.date) return false;
-        if (options.dateFilter.direction === "after" && importedDate <= options.dateFilter.date) return false;
-      }
-      return true;
-    });
-    const limited = sortQueueCandidates(
-      candidates.map((domain) => ({ ...domain, importedAt: importedBySlug.get(domain.slug)?.importedAt })),
-      options.sortBy,
-    ).slice(0, options.limit === "all" ? undefined : Math.max(1, Math.min(options.limit ?? 25, 1000)));
-    const analyzed = limited.map((domain) => analyzeDomain(domain, options.steps, config));
-
-    analyzed.forEach((domain) => upsertDomainAnalysis(toRawDomainAnalysis(domain)));
-
-    analyzed.forEach((domain) => {
-      const imported = importedBySlug.get(domain.slug);
-      if (!imported) return;
-      upsertImportedDomain(
-        toRawImportedDomain({
-          ...imported,
-          status: domain.status,
-          totalScore: domain.totalScore,
-          verdict: domain.verdict,
-          estimatedValue: domain.estimatedValue,
-        }),
-      );
-    });
-
-    const remaining = (await this.listDomains()).filter((domain) => domain.status === "queued").length;
-    return { analyzed: analyzed.length, remaining, failed: 0 };
-  }
-
-  async updateFeedSchedule(feedId: string, schedule: FeedSource["schedule"]) {
-    const feed = (await this.listFeeds()).find((entry) => entry.id === feedId);
-    if (!feed) throw new Error("Feed hittades inte");
-    saveFeedOverride(feedId, { schedule });
-    return { ...feed, schedule };
-  }
-
-  async toggleFeedStatus(feedId: string) {
-    const feed = (await this.listFeeds()).find((entry) => entry.id === feedId);
-    if (!feed) throw new Error("Feed hittades inte");
-    const nextStatus: FeedStatus = feed.status === "paused" ? "active" : "paused";
-    saveFeedOverride(feedId, { status: nextStatus });
-    return { ...feed, status: nextStatus };
-  }
-
-  async runFeed(feedId: string) {
-    return runFeeds(this, [feedId]);
-  }
-
-  async runActiveFeeds() {
-    return runFeeds(this);
-  }
-
-  async createReport(input: CreateReportInput) {
-    const domainCount = (await this.listDomains()).length;
-    const report: Report = {
-      id: `r-${Date.now()}`,
-      title: input.title || "Ny rapport",
-      generatedAt: new Date().toISOString(),
-      domains: domainCount,
-      highlight: input.cadence === "once" ? "Genererad manuellt" : "Schemalagd rapport",
-      format: input.format,
-    };
-    appendReport(report);
-    return report;
-  }
 }
 
 class PrismaSnapTldRepository implements SnapTldRepository {
@@ -1242,14 +1610,15 @@ class PrismaSnapTldRepository implements SnapTldRepository {
   }
 
   async listDomains() {
-    const dbRows = await prisma.snapTldDomainAnalysis.findMany();
-    return dbRows.map(mapPrismaDomainAnalysis);
+    return getPrismaDomainSummaries();
   }
 
   async listDomainPage(query: DomainPageQuery = {}) {
     const domains = await this.listDomains();
+    const page = paginate(sortDomains(filterDomains(domains, query), query.sortKey, query.sortDir), query.page, query.pageSize, 1000);
     return {
-      ...paginate(sortDomains(filterDomains(domains, query), query.sortKey, query.sortDir), query.page, query.pageSize),
+      ...page,
+      items: page.items.map(compactDomainAnalysis),
       meta: getQueueMeta(domains),
     };
   }
@@ -1262,20 +1631,42 @@ class PrismaSnapTldRepository implements SnapTldRepository {
 
   async listImportedDomains() {
     const dbRows = await prisma.snapTldImportedDomain.findMany({ orderBy: { importedAt: "desc" } });
-    const analysisRows = await prisma.snapTldDomainAnalysis.findMany({
-      select: { slug: true, domain: true, source: true, expiresAt: true, categoriesJson: true },
-    });
-    const dbAnalyses = analysisRows.map((row) => ({
-      slug: row.slug,
-      categories: parseJson(
-        row.categoriesJson,
-        buildQueuedAnalysis(row.domain, row.source as DomainAnalysis["source"], row.expiresAt).categories,
-      ),
-    }));
-    return withAnalysisSteps(dbRows.map(mapPrismaImportedDomain), dbAnalyses);
+    return withAnalysisSteps(dbRows.map(mapPrismaImportedDomain), await getPrismaDomainSummaries());
   }
 
   async listImportedDomainPage(query: ImportedPageQuery = {}) {
+    if (canUseFastImportedPage(query)) {
+      const page = normalizePage(query.page);
+      const pageSize = normalizePageSize(query.pageSize);
+      const [dbRows, meta] = await Promise.all([
+        prisma.snapTldImportedDomain.findMany({
+          orderBy: { importedAt: query.sortDir === "asc" ? "asc" : "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        getPrismaImportedMeta(),
+      ]);
+      const analysisRows = dbRows.length > 0
+        ? await prisma.snapTldDomainAnalysis.findMany({
+            where: { slug: { in: dbRows.map((row) => row.slug) } },
+            select: domainAnalysisSummarySelect,
+          })
+        : [];
+      const items = withAnalysisSteps(
+        dbRows.map(mapPrismaImportedDomain),
+        analysisRows.map((row) => mapPrismaDomainAnalysisSummary(row, { expandLegacySubAnalyses: false })),
+      );
+      const totalPages = Math.max(1, Math.ceil(meta.totalDomains / pageSize));
+      return {
+        items,
+        total: meta.totalDomains,
+        page: Math.min(page, totalPages),
+        pageSize,
+        totalPages,
+        meta,
+      };
+    }
+
     const domains = await this.listImportedDomains();
     return {
       ...paginate(
@@ -1288,13 +1679,32 @@ class PrismaSnapTldRepository implements SnapTldRepository {
   }
 
   async listFeeds() {
-    const overrides = await prisma.snapTldFeedOverride.findMany();
+    const [overrides, feedStats] = await Promise.all([
+      prisma.snapTldFeedOverride.findMany(),
+      Promise.all(
+        rawFeeds.map(async (rawFeed) => {
+          const latest = await prisma.snapTldImportedDomain.findFirst({
+            where: { source: "internetstiftelsen", tld: rawFeed.tld },
+            orderBy: { importedAt: "desc" },
+            select: { importedAt: true, batchId: true },
+          });
+          if (!latest) return [rawFeed.id, { lastFetchedAt: "", domainsLastRun: 0 }] as const;
+          const domainsLastRun = await prisma.snapTldImportedDomain.count({
+            where: { source: "internetstiftelsen", tld: rawFeed.tld, batchId: latest.batchId },
+          });
+          return [rawFeed.id, { lastFetchedAt: latest.importedAt.toISOString(), domainsLastRun }] as const;
+        }),
+      ),
+    ]);
     const overrideMap = new Map(overrides.map((row) => [row.feedId, row] as const));
+    const feedStatsMap = new Map(feedStats);
     return rawFeeds.map(mapRawFeed).map((feed) => {
       const override = overrideMap.get(feed.id);
-      if (!override) return feed;
+      const stats = feedStatsMap.get(feed.id);
+      const feedWithStats = stats ? { ...feed, ...stats } : feed;
+      if (!override) return feedWithStats;
       return {
-        ...feed,
+        ...feedWithStats,
         status: (override.status as FeedStatus | null) ?? feed.status,
         schedule: override.scheduleJson ? parseJson(override.scheduleJson, feed.schedule) : feed.schedule,
       };
@@ -1312,12 +1722,63 @@ class PrismaSnapTldRepository implements SnapTldRepository {
     return null;
   }
 
-  async getOverviewSeries() {
-    const rows = await prisma.snapTldDomainAnalysis.findMany({
-      where: { status: "analyzed" },
-      select: { totalScore: true, updatedAt: true },
+  async getOverviewStats() {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const [totalDomains, importedToday, domains] = await Promise.all([
+      prisma.snapTldImportedDomain.count(),
+      prisma.snapTldImportedDomain.count({ where: { importedAt: { gte: start, lt: end } } }),
+      getPrismaDomainSummaries(),
+    ]);
+    const updatedRows = await prisma.snapTldDomainAnalysis.findMany({
+      where: { status: "analyzed", updatedAt: { gte: start, lt: end } },
+      select: { slug: true },
     });
-    return buildOverviewSeries(rows);
+    const updatedToday = new Set(updatedRows.map((row) => row.slug));
+    const analyzedDomains = domains.filter((domain) => domain.status === "analyzed");
+
+    return {
+      total: analyzedDomains.length,
+      totalDomains,
+      importedToday,
+      analyzedToday: analyzedDomains.filter((domain) => updatedToday.has(domain.slug)).length,
+      excellent: analyzedDomains.filter((domain) => domain.verdict === "excellent").length,
+      good: analyzedDomains.filter((domain) => domain.verdict === "good").length,
+      mediocre: analyzedDomains.filter((domain) => domain.verdict === "mediocre").length,
+      skip: analyzedDomains.filter((domain) => domain.verdict === "skip").length,
+      avg:
+        analyzedDomains.length > 0
+          ? Math.round(analyzedDomains.reduce((sum, domain) => sum + rankingScore(domain), 0) / analyzedDomains.length)
+          : 0,
+    };
+  }
+
+  async getOverviewSeries() {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    cutoff.setHours(0, 0, 0, 0);
+    const [domains, analysisRows, importedRows] = await Promise.all([
+      getPrismaDomainSummaries(),
+      prisma.snapTldDomainAnalysis.findMany({
+        where: { status: "analyzed" },
+        select: { slug: true, updatedAt: true },
+      }),
+      prisma.snapTldImportedDomain.findMany({
+        where: { importedAt: { gte: cutoff } },
+        select: { importedAt: true },
+      }),
+    ]);
+    const bySlug = new Map(domains.map((domain) => [domain.slug, domain] as const));
+    return buildOverviewSeries(
+      analysisRows
+        .map((row) => {
+          const domain = bySlug.get(row.slug);
+          return domain ? { totalScore: rankingScore(domain), updatedAt: row.updatedAt } : null;
+        })
+        .filter((row): row is { totalScore: number; updatedAt: Date } => Boolean(row)),
+      importedRows,
+    );
   }
 
   async getUserState() {
@@ -1475,10 +1936,11 @@ class PrismaSnapTldRepository implements SnapTldRepository {
       return true;
     });
 
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
+    const userState = await this.getUserState();
+    const config = buildAnalysisConfig(userState.activeWeightsYaml);
     const domainAnalyses =
       input.selectedSteps.length > 0
-        ? newImportedDomains.map((entry) => analyzeDomain(buildQueuedAnalysis(entry.domain, entry.source, entry.expiresAt), input.selectedSteps, config))
+        ? await analyzeDomainsAsync(newImportedDomains.map((entry) => buildQueuedAnalysis(entry.domain, entry.source, entry.expiresAt)), input.selectedSteps, config, userState.settings)
         : newImportedDomains
             .filter((entry) => !existingAnalysisSlugs.has(entry.slug))
             .map((entry) => buildQueuedAnalysis(entry.domain, entry.source, entry.expiresAt));
@@ -1488,7 +1950,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
       const analysis = analysisBySlug.get(entry.slug);
       return {
         ...entry,
-        status: analysis ? ("analyzed" as const) : entry.status,
+        status: analysis?.status ?? entry.status,
         totalScore: analysis?.totalScore ?? entry.totalScore,
         verdict: analysis?.verdict ?? entry.verdict,
         estimatedValue: analysis?.estimatedValue ?? entry.estimatedValue,
@@ -1555,6 +2017,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
         }),
       ),
     ]);
+    clearDomainSummaryCache();
 
     return {
       imported: newImportedDomains.length,
@@ -1567,8 +2030,9 @@ class PrismaSnapTldRepository implements SnapTldRepository {
     if (!domain) throw new Error("Domän hittades inte");
 
     if (step !== "overview" && !isAnalysisCategory(step)) throw new Error("Ogiltigt analyssteg");
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
-    const next = analyzeDomain(domain, [step as AnalysisStep], config);
+    const userState = await this.getUserState();
+    const config = buildAnalysisConfig(userState.activeWeightsYaml);
+    const next = await analyzeDomainAsync(domain, [step as AnalysisStep], config, userState.settings);
 
     await prisma.snapTldDomainAnalysis.upsert({
       where: { slug },
@@ -1637,13 +2101,15 @@ class PrismaSnapTldRepository implements SnapTldRepository {
         },
       });
     }
+    clearDomainSummaryCache();
 
     return { analyzed: true };
   }
 
   async analyzeQueue(input: AnalyzeQueueInput) {
     const options = normalizeAnalyzeQueueInput(input);
-    const config = buildAnalysisConfig((await this.getUserState()).activeWeightsYaml);
+    const userState = await this.getUserState();
+    const config = buildAnalysisConfig(userState.activeWeightsYaml);
     const [analysisRows, importedRows] = await Promise.all([
       prisma.snapTldDomainAnalysis.findMany(),
       prisma.snapTldImportedDomain.findMany({ select: { slug: true, importedAt: true } }),
@@ -1676,7 +2142,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
       };
     }
 
-    const analyzed = limited.map((domain) => analyzeDomain(domain, options.steps, config));
+    const analyzed = await analyzeDomainsAsync(limited, options.steps, config, userState.settings);
 
     await prisma.$transaction([
       ...analyzed.map((domain) =>
@@ -1711,6 +2177,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
         }),
       ),
     ]);
+    clearDomainSummaryCache();
 
     return {
       analyzed: analyzed.length,
@@ -1806,7 +2273,8 @@ class HttpSnapTldRepository implements SnapTldRepository {
   async listFeeds() { return this.request<FeedSource[]>("/feeds"); }
   async listReports() { return this.request<Report[]>("/reports"); }
   async getReportById(reportId: string) { return this.request<Report | null>(`/reports/${reportId}`); }
-  async getOverviewSeries() { return this.request<{ scoreTrend: { label: string; value: number }[]; volumePerDay: { label: string; value: number }[] }>("/overview/series"); }
+  async getOverviewStats() { return this.request<OverviewStats>("/overview/stats"); }
+  async getOverviewSeries() { return this.request<{ scoreTrend: { label: string; value: number }[]; volumePerDay: { label: string; value: number }[]; importedPerDay: { label: string; value: number }[] }>("/overview/series"); }
   async getUserState() { return this.request<SnapTldUserState>("/user-state"); }
   async toggleWatch(slug: string) { return this.request<string[]>(`/user-state/watchlist/${slug}`, { method: "POST" }); }
   async addWatchMany(slugs: string[]) { return this.request<string[]>("/user-state/watchlist", { method: "POST", body: JSON.stringify({ slugs }) }); }
@@ -1829,10 +2297,6 @@ class HttpSnapTldRepository implements SnapTldRepository {
 }
 
 let repository: SnapTldRepository | null = null;
-
-export function createMockSnapTldRepository(): SnapTldRepository {
-  return new MockSnapTldRepository();
-}
 
 export function createLocalSnapTldRepository(): SnapTldRepository {
   return new PrismaSnapTldRepository();

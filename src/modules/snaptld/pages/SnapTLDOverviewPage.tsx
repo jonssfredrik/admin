@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Activity, Database, Radar, Search, Sparkles, Upload } from "lucide-react";
+import { BarChart2, Database, Radar, Search, Sparkles, Upload } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
-import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { useToast } from "@/components/toast/ToastProvider";
@@ -16,25 +15,28 @@ import { ImportDialog } from "@/modules/snaptld/components/ImportDialog";
 import { AnalysisProgress } from "@/modules/snaptld/components/AnalysisProgress";
 import { NewSinceBanner } from "@/modules/snaptld/components/NewSinceBanner";
 import { SnapTldUserStateProvider } from "@/modules/snaptld/client/SnapTldUserStateProvider";
-import { getActiveFeedCount, getOverviewStats, getRunningDomain, getTopCandidates, getVerdictDonut } from "@/modules/snaptld/selectors/overview";
-import type { DomainAnalysis, FeedSource, SnapTldUserState } from "@/modules/snaptld/types";
+import { getActiveFeedCount, getRunningDomain, getTopCandidates } from "@/modules/snaptld/selectors/overview";
+import { verdictMeta } from "@/modules/snaptld/data/core";
+import type { DomainAnalysis, FeedSource, OverviewStats, SnapTldUserState, Verdict } from "@/modules/snaptld/types";
 
 export function SnapTLDOverviewPage({
   domains,
   feeds,
-  scoreTrend,
+  stats,
+  importedPerDay,
   volumePerDay,
   initialUserState,
 }: {
   domains: DomainAnalysis[];
   feeds: FeedSource[];
-  scoreTrend: { label: string; value: number }[];
+  stats: OverviewStats;
+  importedPerDay: { label: string; value: number }[];
   volumePerDay: { label: string; value: number }[];
   initialUserState: SnapTldUserState;
 }) {
   return (
     <SnapTldUserStateProvider initialState={initialUserState}>
-      <SnapTLDOverviewPageContent domains={domains} feeds={feeds} scoreTrend={scoreTrend} volumePerDay={volumePerDay} />
+      <SnapTLDOverviewPageContent domains={domains} feeds={feeds} stats={stats} importedPerDay={importedPerDay} volumePerDay={volumePerDay} />
     </SnapTldUserStateProvider>
   );
 }
@@ -66,24 +68,36 @@ function EmptyState({
 function SnapTLDOverviewPageContent({
   domains,
   feeds,
-  scoreTrend,
+  stats,
+  importedPerDay,
   volumePerDay,
 }: {
   domains: DomainAnalysis[];
   feeds: FeedSource[];
-  scoreTrend: { label: string; value: number }[];
+  stats: OverviewStats;
+  importedPerDay: { label: string; value: number }[];
   volumePerDay: { label: string; value: number }[];
 }) {
   const toast = useToast();
   const [importOpen, setImportOpen] = useState(false);
   const [runningFeeds, setRunningFeeds] = useState(false);
 
-  const stats = useMemo(() => getOverviewStats(domains), [domains]);
   const topCandidates = useMemo(() => getTopCandidates(domains), [domains]);
-  const verdictDonut = useMemo(() => getVerdictDonut(domains), [domains]);
+  const hasImportedPerDay = importedPerDay.some((d) => d.value > 0);
+  const verdictDonut = useMemo(
+    () =>
+      ([
+        ["excellent", stats.excellent, "#10b981"],
+        ["good", stats.good, "#34d399"],
+        ["mediocre", stats.mediocre, "#f59e0b"],
+        ["skip", stats.skip, "#ef4444"],
+      ] as Array<[Verdict, number, string]>)
+        .map(([verdict, value, color]) => ({ label: verdictMeta[verdict].label, value, color }))
+        .filter((item) => item.value > 0),
+    [stats],
+  );
   const activeFeeds = useMemo(() => getActiveFeedCount(feeds), [feeds]);
   const running = useMemo(() => getRunningDomain(domains), [domains]);
-  const hasScoreTrend = scoreTrend.length > 0;
   const hasVolumePerDay = volumePerDay.length > 0;
   const hasTopCandidates = topCandidates.length > 0;
   const hasVerdictDonut = verdictDonut.length > 0;
@@ -140,19 +154,19 @@ function SnapTLDOverviewPageContent({
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold tracking-tight">Snittscore över tid</h2>
-              <p className="text-xs text-muted">Rullande 7-dagars medelvärde</p>
+              <h2 className="text-sm font-semibold tracking-tight">Importerade per dag</h2>
+              <p className="text-xs text-muted">Antal domäner importerade de senaste 8 dagarna</p>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted">
-              <Activity size={13} />
+              <BarChart2 size={13} />
               Senaste 8 dagarna
             </div>
           </div>
           <div className="mt-4">
-            {hasScoreTrend ? (
-              <AreaChart data={scoreTrend} height={200} formatValue={(value) => `${value} p`} />
+            {hasImportedPerDay ? (
+              <BarChart data={importedPerDay} height={200} />
             ) : (
-              <EmptyState icon={<Activity size={16} />} title="Ingen scorehistorik än" description="Kör analys på importerade domäner för att bygga upp trenden." />
+              <EmptyState icon={<BarChart2 size={16} />} title="Inga importer ännu" description="Importera domäner via feeds eller manuellt för att se volymen per dag." />
             )}
           </div>
         </Card>

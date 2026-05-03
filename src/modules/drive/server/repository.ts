@@ -182,6 +182,7 @@ class PrismaDriveRepository implements DriveRepository {
     await this.ensureSeeded();
     const name = input.name.trim();
     if (!name) throw new Error("Mappnamn saknas");
+    await this.ensureParentFolder(input.parentId ?? null);
     const createdAt = now();
     const item = await prisma.driveItem.create({
       data: {
@@ -215,6 +216,7 @@ class PrismaDriveRepository implements DriveRepository {
     await this.ensureSeeded();
     const name = input.name.trim();
     if (!name) throw new Error("Filnamn saknas");
+    await this.ensureParentFolder(input.parentId ?? null);
     const extension = extensionFor(name);
     const type = typeFor(input.mimeType, extension);
     const availableName = await this.availableName(name, input.parentId ?? null);
@@ -260,16 +262,29 @@ class PrismaDriveRepository implements DriveRepository {
     await this.ensureSeeded();
     const current = await prisma.driveItem.findUnique({ where: { id } });
     if (!current) throw new Error("Drive-objekt hittades inte");
+    const nextName = await this.availableName(input.name.trim(), current.parentId, id);
     const row = await prisma.driveItem.update({
       where: { id },
-      data: { name: await this.availableName(input.name.trim(), current.parentId, id) },
+      data: { name: nextName },
       include: { activities: { orderBy: { createdAt: "desc" } } },
     });
+    if (row.kind === "folder") await this.updateDescendantPaths(row.id);
     return mapItem(row);
   }
 
   async moveItem(id: string, input: MoveDriveItemInput) {
     await this.ensureSeeded();
+    const all = await prisma.driveItem.findMany();
+    const current = all.find((item) => item.id === id);
+    if (!current) throw new Error("Drive-objekt hittades inte");
+    if (input.parentId === id) throw new Error("En mapp kan inte flyttas in i sig själv");
+    const parent = input.parentId ? all.find((item) => item.id === input.parentId) : null;
+    if (input.parentId && !parent) throw new Error("Målmappen hittades inte");
+    if (parent && parent.kind !== "folder") throw new Error("Objekt kan bara flyttas till mappar");
+    if (parent?.isDeleted) throw new Error("Objekt kan inte flyttas till papperskorgen som mål");
+    if (current.kind === "folder" && parent && isDescendantRow(parent, current, all)) {
+      throw new Error("En mapp kan inte flyttas in i en egen undermapp");
+    }
     const row = await prisma.driveItem.update({
       where: { id },
       data: {
@@ -278,11 +293,18 @@ class PrismaDriveRepository implements DriveRepository {
       },
       include: { activities: { orderBy: { createdAt: "desc" } } },
     });
+    if (row.kind === "folder") await this.updateDescendantPaths(row.id);
     return mapItem(row);
   }
 
   async deleteItem(id: string) {
-    return this.patch(id, { isDeleted: true });
+    await this.ensureSeeded();
+    const all = await prisma.driveItem.findMany();
+    const target = all.find((item) => item.id === id);
+    if (!target) throw new Error("Drive-objekt hittades inte");
+    const ids = [id, ...all.filter((item) => isDescendantRow(item, target, all)).map((item) => item.id)];
+    await prisma.driveItem.updateMany({ where: { id: { in: ids } }, data: { isDeleted: true } });
+    return this.getRequired(id);
   }
 
   async permanentDeleteItem(id: string) {
@@ -306,7 +328,17 @@ class PrismaDriveRepository implements DriveRepository {
   }
 
   async restoreItem(id: string) {
-    return this.patch(id, { isDeleted: false });
+    await this.ensureSeeded();
+    const all = await prisma.driveItem.findMany();
+    const target = all.find((item) => item.id === id);
+    if (!target) throw new Error("Drive-objekt hittades inte");
+    const ids = [
+      id,
+      ...ancestorRows(target, all).map((item) => item.id),
+      ...all.filter((item) => isDescendantRow(item, target, all)).map((item) => item.id),
+    ];
+    await prisma.driveItem.updateMany({ where: { id: { in: ids } }, data: { isDeleted: false } });
+    return this.getRequired(id);
   }
 
   async toggleFavorite(id: string) {
@@ -334,6 +366,27 @@ class PrismaDriveRepository implements DriveRepository {
     if (!parentId) return ["Drive"];
     const parent = await prisma.driveItem.findUnique({ where: { id: parentId } });
     return parent ? [...parsePath(parent.pathJson), parent.name] : ["Drive"];
+  }
+
+  private async ensureParentFolder(parentId: string | null) {
+    if (!parentId) return;
+    const parent = await prisma.driveItem.findUnique({ where: { id: parentId } });
+    if (!parent) throw new Error("Målmappen hittades inte");
+    if (parent.kind !== "folder") throw new Error("Objekt kan bara placeras i mappar");
+    if (parent.isDeleted) throw new Error("Objekt kan inte placeras i papperskorgen som mål");
+  }
+
+  private async updateDescendantPaths(folderId: string) {
+    const all = await prisma.driveItem.findMany();
+    const folder = all.find((item) => item.id === folderId);
+    if (!folder) return;
+    const descendants = all.filter((item) => isDescendantRow(item, folder, all));
+    for (const item of descendants) {
+      await prisma.driveItem.update({
+        where: { id: item.id },
+        data: { pathJson: JSON.stringify(await this.parentPath(item.parentId)) },
+      });
+    }
   }
 
   private async availableName(name: string, parentId: string | null, excludeId?: string) {
@@ -440,6 +493,18 @@ function isDescendantRow(item: PrismaDriveItem, folder: PrismaDriveItem, allItem
     parentId = allItems.find((entry) => entry.id === parentId)?.parentId ?? null;
   }
   return false;
+}
+
+function ancestorRows(item: PrismaDriveItem, allItems: PrismaDriveItem[]) {
+  const ancestors: PrismaDriveItem[] = [];
+  let parentId = item.parentId;
+  while (parentId) {
+    const parent = allItems.find((entry) => entry.id === parentId);
+    if (!parent) break;
+    ancestors.push(parent);
+    parentId = parent.parentId;
+  }
+  return ancestors;
 }
 
 let repository: DriveRepository | null = null;

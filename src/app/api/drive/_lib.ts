@@ -19,5 +19,11 @@ export function notFound(message = "Drive-objekt hittades inte") {
 
 export function serverError(error: unknown) {
   const message = error instanceof Error ? error.message : "Okänt Drive-fel";
+  if (/hittades inte/i.test(message)) {
+    return NextResponse.json({ error: message }, { status: 404 });
+  }
+  if (/saknas|ogiltig|kan inte|bara|större än/i.test(message)) {
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
   return NextResponse.json({ error: message }, { status: 500 });
 }

@@ -65,7 +65,7 @@ export function RegisterActions({ domain }: { domain: DomainAnalysis }) {
             Länkar till registrarer. Öppnas i ny flik och priset samt tillgänglighet verifieras där.
           </p>
         </div>
-        <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
+        <ExpiryBadge expiresAt={domain.expiresAt} source={domain.source} variant="long" />
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

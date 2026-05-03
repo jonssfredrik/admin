@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Sparkles, X } from "lucide-react";
 import type { DomainAnalysis } from "@/modules/snaptld/types";
 import { useLastVisit } from "@/modules/snaptld/lib/lastVisit";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
 export function NewSinceBanner({ domains }: { domains: DomainAnalysis[] }) {
   const lastVisit = useLastVisit();
@@ -23,7 +24,7 @@ export function NewSinceBanner({ domains }: { domains: DomainAnalysis[] }) {
   if (newSince.length === 0) return null;
 
   const topNew = [...newSince]
-    .sort((a, b) => b.totalScore - a.totalScore)
+    .sort((a, b) => rankingScore(b) - rankingScore(a))
     .slice(0, 3);
 
   return (
@@ -42,7 +43,7 @@ export function NewSinceBanner({ domains }: { domains: DomainAnalysis[] }) {
               <Link href={`/snaptld/${domain.slug}`} className="font-mono text-fg hover:underline">
                 {domain.domain}
               </Link>
-              <span className="text-muted"> ({domain.totalScore})</span>
+              <span className="text-muted"> ({domain.totalScore}/{domain.scoreMax ?? 100})</span>
               {index < topNew.length - 1 && <span className="text-muted"> · </span>}
             </span>
           ))}

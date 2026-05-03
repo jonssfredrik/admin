@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const [domains, initialUserState] = await Promise.all([
     repository.listImportedDomainPage({
       page: Number(readParam(params, "page") ?? 1),
-      pageSize: 100,
+      pageSize: 50,
       query: readParam(params, "q") ?? "",
       status: (readParam(params, "status") as "all" | ImportedDomainRecord["status"] | undefined) ?? "all",
       source: (readParam(params, "source") as "all" | ImportedDomainRecord["source"] | undefined) ?? "all",

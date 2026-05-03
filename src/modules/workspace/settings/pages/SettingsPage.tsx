@@ -1,11 +1,11 @@
 import { PageHeader } from "@/components/layout/PageHeader";
-import { SettingsTabs } from "@/modules/workspace/settings/components/SettingsTabs";
+import { SettingsTabs, type SettingsSection } from "@/modules/workspace/settings/components/SettingsTabs";
 
-export function SettingsPage() {
+export function SettingsPage({ section = "profile" }: { section?: SettingsSection }) {
   return (
-    <div className="space-y-8">
-      <PageHeader title="Inställningar" subtitle="Konfigurera din arbetsyta" />
-      <SettingsTabs />
+    <div className="space-y-6">
+      <PageHeader title="Inställningar" subtitle="Konfigurera konto, fakturering och arbetsytans notifieringar." />
+      <SettingsTabs section={section} />
     </div>
   );
 }

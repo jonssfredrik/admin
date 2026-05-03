@@ -34,16 +34,22 @@ export function SeoTab({
 }) {
   const { seo } = domain;
   const cat = domain.categories.seo;
+  const moz = cat.subAnalyses?.find((item) => item.id === "seo-moz");
+  const hasMozData = moz?.status === "complete";
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      {hasMozData ? <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <MozStat label="Domain Authority" value={seo.domainAuthority} hint="Moz DA" />
         <MozStat label="Page Authority" value={seo.pageAuthority} hint="Moz PA" />
         <MozStat label="Backlinks" value={seo.backlinks} max={Math.max(seo.backlinks, 1000)} hint="Totalt" />
         <MozStat label="Refererande domäner" value={seo.referringDomains} max={Math.max(seo.referringDomains, 100)} />
         <MozStat label="Spam-poäng" value={seo.spamScore} hint={seo.spamScore > 10 ? "Förhöjd - granska" : "Låg risk"} />
-      </div>
+      </div> : (
+        <Card className="text-sm text-muted">
+          Moz-data saknas. {moz?.reason ?? "KÃ¶r SEO med ansluten Moz API-nyckel fÃ¶r DA/PA, backlinks och spam score."}
+        </Card>
+      )}
 
       <Card className="space-y-3">
         <StepCardHeader

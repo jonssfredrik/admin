@@ -1,7 +1,8 @@
 import type { DomainAnalysis, Verdict } from "@/modules/snaptld/types";
 import { expiryInfo } from "@/modules/snaptld/lib/urgency";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
-export type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value";
+export type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis";
 export type QueueSortDir = "asc" | "desc";
 
 export interface QueueFilters {
@@ -61,7 +62,7 @@ export function getQueueRows(
           return (a.estimatedValue.min - b.estimatedValue.min) * dir;
         case "score":
         default:
-          return (a.totalScore - b.totalScore) * dir;
+          return (rankingScore(a) - rankingScore(b)) * dir;
       }
     });
 }

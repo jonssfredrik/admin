@@ -105,9 +105,9 @@ export function FeedCard({ feed: initialFeed }: { feed: FeedSource }) {
         <div className="text-muted">Kadens</div>
         <div className="font-medium">{formatFeedSchedule(feed.schedule)}</div>
         <div className="text-muted">Senaste hämtning</div>
-        <div className="font-mono">{formatDateTime(feed.lastFetchedAt)}</div>
+        <div className="font-mono">{feed.lastFetchedAt ? formatDateTime(feed.lastFetchedAt) : "Aldrig"}</div>
         <div className="text-muted">Domäner (senaste)</div>
-        <div className="font-medium tabular-nums">{feed.domainsLastRun.toLocaleString("sv-SE")}</div>
+        <div className="font-medium tabular-nums">{feed.lastFetchedAt ? feed.domainsLastRun.toLocaleString("sv-SE") : "Ingen kÃ¶rning"}</div>
       </dl>
 
       <div className="flex gap-2 border-t pt-3">

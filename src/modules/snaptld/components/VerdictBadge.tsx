@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { verdictMeta, type Verdict } from "@/modules/snaptld/data/core";
+import type { AnalysisStatus } from "@/modules/snaptld/types";
 
 const tones = {
   success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
@@ -8,7 +9,32 @@ const tones = {
   neutral: "bg-fg/5 text-muted border-border",
 } as const;
 
-export function VerdictBadge({ verdict, size = "sm" }: { verdict: Verdict; size?: "sm" | "md" }) {
+export function VerdictBadge({
+  verdict,
+  size = "sm",
+  status,
+  analyzed = true,
+}: {
+  verdict: Verdict;
+  size?: "sm" | "md";
+  status?: AnalysisStatus;
+  analyzed?: boolean;
+}) {
+  if (!analyzed || status === "queued" || status === "running") {
+    return (
+      <span
+        className={clsx(
+          "inline-flex items-center gap-1.5 rounded-md border font-medium",
+          tones.neutral,
+          size === "sm" ? "px-1.5 py-0.5 text-xs" : "px-2.5 py-1 text-sm",
+        )}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+        Ej analyserad
+      </span>
+    );
+  }
+
   const meta = verdictMeta[verdict];
   return (
     <span

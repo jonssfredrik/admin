@@ -9,7 +9,11 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge, Table, Td, Th } from "@/components/ui/Table";
 import { useToast } from "@/components/toast/ToastProvider";
-import { formatInvoiceAmount, invoiceDisplayStatus } from "@/modules/billing/lib/format";
+import {
+  formatInvoiceAmount,
+  invoiceDisplayNumber,
+  invoiceDisplayStatus,
+} from "@/modules/billing/lib/format";
 import { invoiceTotals } from "@/modules/billing/lib/totals";
 import { useCompanies } from "@/modules/billing/lib/useCompanies";
 import { useInvoices } from "@/modules/billing/lib/useInvoices";
@@ -212,7 +216,7 @@ export function CompanyDetailPage({ id }: { id: string }) {
                   <tr key={invoice.id} className="transition-colors hover:bg-bg/50">
                     <Td className="font-mono text-xs">
                       <Link href={`/billing/${invoice.id}`} className="hover:text-fg">
-                        {invoice.id}
+                        {invoiceDisplayNumber(invoice)}
                       </Link>
                     </Td>
                     <Td>{invoice.customer.name}</Td>

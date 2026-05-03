@@ -47,8 +47,38 @@ const verdictFilters: { id: "all" | Verdict; label: string }[] = [
   { id: "skip", label: verdictMeta.skip.label },
 ];
 
-const PAGE_SIZE = 20;
+const statusFilters: Array<{ id: "all" | DomainAnalysis["status"]; label: string }> = [
+  { id: "all", label: "Alla statusar" },
+  { id: "queued", label: "Koad" },
+  { id: "running", label: "Kors" },
+  { id: "analyzed", label: "Analyserad" },
+  { id: "failed", label: "Misslyckad" },
+];
+
+const scoreRangeFilters = [
+  { id: "all", label: "Alla scores", min: "", max: "" },
+  { id: "under-40", label: "<40", min: "", max: "39" },
+  { id: "40-50", label: "40-50", min: "40", max: "50" },
+  { id: "50-60", label: "50-60", min: "50", max: "60" },
+  { id: "60-70", label: "60-70", min: "60", max: "70" },
+  { id: "70-80", label: "70-80", min: "70", max: "80" },
+  { id: "80-plus", label: "80+", min: "80", max: "" },
+] as const;
+
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
 type AnalysisStep = AnalyzeQueueInput["steps"][number];
+
+const analysisStepMeta: Array<{ id: AnalysisCategory; label: string; short: string }> = [
+  { id: "structure", label: "Struktur", short: "St" },
+  { id: "lexical", label: "Lexikal", short: "Le" },
+  { id: "brand", label: "Varumarke", short: "Br" },
+  { id: "market", label: "Marknad", short: "Ma" },
+  { id: "risk", label: "Risk", short: "Ri" },
+  { id: "salability", label: "Saljbarhet", short: "Sa" },
+  { id: "seo", label: "SEO", short: "Se" },
+  { id: "history", label: "Historik", short: "Hi" },
+];
 
 const queueAnalysisSteps: { id: AnalysisStep; label: string; hint: string }[] = [
   { id: "overview", label: "Översikt", hint: "Kör alla analyssteg och räknar total score" },
@@ -61,6 +91,18 @@ const queueAnalysisSteps: { id: AnalysisStep; label: string; hint: string }[] = 
   { id: "seo", label: "SEO", hint: "Länksignaler och sökpotential" },
   { id: "history", label: "Historik", hint: "Wayback och tidigare innehåll" },
 ];
+
+const analysisStepRequirements: Record<AnalysisStep, string[]> = {
+  overview: ["Alla lokala regler", "OpenAI for AI-delar", "Moz for SEO-metrik", "WHOIS/RDAP och Wayback for historik"],
+  structure: ["Kors lokalt", "Ingen API-nyckel"],
+  lexical: ["Kors lokalt", "Svenskt lexikon i projektet", "Ingen API-nyckel"],
+  brand: ["Lokal brandbarhet", "OpenAI API-nyckel for AI-bedomning"],
+  market: ["Lokal nischmatchning", "OpenAI API-nyckel for marknadsbedomning"],
+  risk: ["Lokala språkliga riskflaggor", "OpenAI API-nyckel for extern varumarkeskontroll"],
+  salability: ["Lokal saljbarhetsmodell", "OpenAI API-nyckel for koparanalys"],
+  seo: ["Lokal keyword-relevans", "Moz API-nyckel for DA/PA och backlinks"],
+  history: ["WHOIS/RDAP-natverksanrop", "Wayback API for snapshots"],
+};
 
 export function QueuePage({
   domains,
@@ -84,19 +126,44 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
 
   const queryParam = searchParams.get("q") ?? "";
   const verdict = (searchParams.get("verdict") as (typeof verdictFilters)[number]["id"] | null) ?? "all";
+  const status = (searchParams.get("status") as (typeof statusFilters)[number]["id"] | null) ?? "all";
   const tld = searchParams.get("tld") ?? "all";
+  const source = searchParams.get("src") ?? "all";
   const tagFilter = searchParams.get("tag");
   const onlyWatched = searchParams.get("watched") === "1";
   const showHidden = searchParams.get("hidden") === "1";
+  const hideReviewed = searchParams.get("notreviewed") === "1";
+  const minScore = Number(searchParams.get("smin") ?? 0);
+  const maxScore = Number(searchParams.get("smax") ?? 0);
+  const minDaysUntilExpiry = Number(searchParams.get("emin") ?? 0);
+  const maxDaysUntilExpiry = Number(searchParams.get("emax") ?? searchParams.get("expiry") ?? 0);
+  const domainLength = searchParams.get("len") ?? "all";
+  const minDomainLength = Number(searchParams.get("lmin") ?? 0);
+  const maxDomainLength = Number(searchParams.get("lmax") ?? 0);
+  const minValue = Number(searchParams.get("vmin") ?? 0);
+  const maxValue = Number(searchParams.get("vmax") ?? 0);
+  const analysisStepMode = (searchParams.get("amode") as "all" | "none" | "complete" | "has" | "missing" | null) ?? "all";
+  const analysisStep = (searchParams.get("astep") as AnalysisCategory | null) ?? "seo";
   const sortKey = (searchParams.get("sort") as QueueSortKey | null) ?? "score";
   const sortDir = (searchParams.get("dir") as QueueSortDir | null) ?? "desc";
   const [query, setQuery] = useState(queryParam);
+  const [scoreMinInput, setScoreMinInput] = useState(searchParams.get("smin") ?? "");
+  const [scoreMaxInput, setScoreMaxInput] = useState(searchParams.get("smax") ?? "");
+  const [lengthMinInput, setLengthMinInput] = useState(searchParams.get("lmin") ?? "");
+  const [lengthMaxInput, setLengthMaxInput] = useState(searchParams.get("lmax") ?? "");
+  const [expiryMinInput, setExpiryMinInput] = useState(searchParams.get("emin") ?? "");
+  const [expiryMaxInput, setExpiryMaxInput] = useState(searchParams.get("emax") ?? searchParams.get("expiry") ?? "");
+  const [valueMinInput, setValueMinInput] = useState(searchParams.get("vmin") ?? "");
+  const [valueMaxInput, setValueMaxInput] = useState(searchParams.get("vmax") ?? "");
+  const [customPageSize, setCustomPageSize] = useState(PAGE_SIZE_OPTIONS.includes(domains.pageSize as (typeof PAGE_SIZE_OPTIONS)[number]) ? "" : String(domains.pageSize));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [analyzingQueue, setAnalyzingQueue] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
 
   const pageRows = domains.items;
+  const pageSize = domains.pageSize;
   const uniqueTlds = domains.meta.uniqueTlds;
+  const uniqueSources = domains.meta.uniqueSources;
   const pageCount = domains.totalPages;
   const clampedPage = domains.page - 1;
 
@@ -189,12 +256,58 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
 
   const resetFilters = () => {
     setQuery("");
-    updateParams({ q: null, verdict: null, tld: null, tag: null, watched: null, hidden: null, page: null });
+    setScoreMinInput("");
+    setScoreMaxInput("");
+    setLengthMinInput("");
+    setLengthMaxInput("");
+    setExpiryMinInput("");
+    setExpiryMaxInput("");
+    setValueMinInput("");
+    setValueMaxInput("");
+    updateParams({ q: null, verdict: null, status: null, tld: null, src: null, tag: null, watched: null, hidden: null, notreviewed: null, smin: null, smax: null, emin: null, emax: null, expiry: null, len: null, lmin: null, lmax: null, vmin: null, vmax: null, amode: null, astep: null, page: null });
   };
 
   const allTags = Array.from(new Set(Object.values(userState.state.notes).flatMap((note) => note.tags))).sort();
   const activeFilters =
-    (queryParam ? 1 : 0) + (verdict !== "all" ? 1 : 0) + (tld !== "all" ? 1 : 0) + (tagFilter ? 1 : 0) + (onlyWatched ? 1 : 0);
+    (queryParam ? 1 : 0) +
+    (verdict !== "all" ? 1 : 0) +
+    (status !== "all" ? 1 : 0) +
+    (tld !== "all" ? 1 : 0) +
+    (source !== "all" ? 1 : 0) +
+    (tagFilter ? 1 : 0) +
+    (onlyWatched ? 1 : 0) +
+    (hideReviewed ? 1 : 0) +
+    (minScore > 0 ? 1 : 0) +
+    (maxScore > 0 ? 1 : 0) +
+    (minDaysUntilExpiry > 0 ? 1 : 0) +
+    (maxDaysUntilExpiry > 0 ? 1 : 0) +
+    (domainLength !== "all" ? 1 : 0) +
+    (minDomainLength > 0 ? 1 : 0) +
+    (maxDomainLength > 0 ? 1 : 0) +
+    (minValue > 0 ? 1 : 0) +
+    (maxValue > 0 ? 1 : 0) +
+    (analysisStepMode !== "all" ? 1 : 0);
+
+  const applyCustomRanges = () => {
+    updateParams({
+      smin: scoreMinInput.trim(),
+      smax: scoreMaxInput.trim(),
+      lmin: lengthMinInput.trim(),
+      lmax: lengthMaxInput.trim(),
+      emin: expiryMinInput.trim(),
+      emax: expiryMaxInput.trim(),
+      vmin: valueMinInput.trim(),
+      vmax: valueMaxInput.trim(),
+      expiry: null,
+      len: null,
+      page: "1",
+    });
+  };
+
+  const updatePageSize = (nextPageSize: number) => {
+    const normalized = Math.max(1, Math.min(Math.floor(nextPageSize), 1000));
+    updateParams({ ps: normalized === DEFAULT_PAGE_SIZE ? null : String(normalized), page: "1" });
+  };
 
   const rerunAnalysis = async (domain: DomainAnalysis) => {
     await rerunAnalysisAction(domain.slug);
@@ -281,6 +394,53 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           </div>
 
           <div className="flex gap-1 rounded-lg border bg-surface p-1">
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => updateParams({ status: filter.id, page: "1" })}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  status === filter.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-surface p-1">
+            {([
+              { id: "all", label: "Alla steg" },
+              { id: "none", label: "Ej analyserad" },
+              { id: "complete", label: "8/8 steg" },
+              { id: "has", label: "Har steg" },
+              { id: "missing", label: "Saknar steg" },
+            ] as const).map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => updateParams({ amode: filter.id, astep: filter.id === "has" || filter.id === "missing" ? analysisStep : null, page: "1" })}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  analysisStepMode === filter.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
+            {(analysisStepMode === "has" || analysisStepMode === "missing") && (
+              <select
+                value={analysisStep}
+                onChange={(event) => updateParams({ astep: event.target.value, page: "1" })}
+                className="h-7 rounded-md border bg-bg px-2 text-xs outline-none focus:border-fg/30"
+              >
+                {analysisStepMeta.map((step) => (
+                  <option key={step.id} value={step.id}>{step.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex gap-1 rounded-lg border bg-surface p-1">
             <button
               onClick={() => updateParams({ tld: "all", page: "1" })}
               className={clsx(
@@ -304,6 +464,151 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             ))}
           </div>
 
+          {uniqueSources.length > 1 && (
+            <div className="flex gap-1 rounded-lg border bg-surface p-1">
+              <button
+                onClick={() => updateParams({ src: "all", page: "1" })}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  source === "all" ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                Alla källor
+              </button>
+              {uniqueSources.map((value) => (
+                <button
+                  key={value}
+                  onClick={() => updateParams({ src: value, page: "1" })}
+                  className={clsx(
+                    "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                    source === value ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                  )}
+                >
+                  {value.replace("-", " ")}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+            {([
+              { id: "all", label: "Alla längder" },
+              { id: "short", label: "Kort (≤7)" },
+              { id: "medium", label: "Medel (8–12)" },
+              { id: "long", label: "Lång (13+)" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => {
+                  setLengthMinInput("");
+                  setLengthMaxInput("");
+                  updateParams({ len: opt.id, lmin: null, lmax: null, page: "1" });
+                }}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  domainLength === opt.id && minDomainLength === 0 && maxDomainLength === 0 ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+            {scoreRangeFilters.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => {
+                  setScoreMinInput(opt.min);
+                  setScoreMaxInput(opt.max);
+                  updateParams({ smin: opt.min, smax: opt.max, page: "1" });
+                }}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  (opt.id === "all"
+                    ? minScore === 0 && maxScore === 0
+                    : String(minScore || "") === opt.min && String(maxScore || "") === opt.max)
+                    ? "bg-fg text-bg"
+                    : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+            {([
+              { id: "0", label: "Alla datum" },
+              { id: "7", label: "≤7d" },
+              { id: "14", label: "≤14d" },
+              { id: "30", label: "≤30d" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => {
+                  setExpiryMinInput("");
+                  setExpiryMaxInput(opt.id === "0" ? "" : opt.id);
+                  updateParams({ emin: null, emax: opt.id === "0" ? null : opt.id, expiry: null, page: "1" });
+                }}
+                className={clsx(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  minDaysUntilExpiry === 0 && String(maxDaysUntilExpiry || 0) === opt.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="grid w-full gap-2 rounded-lg border bg-surface p-2 md:grid-cols-[repeat(4,minmax(160px,1fr))_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyCustomRanges();
+            }}
+          >
+            <RangeInputs
+              label="Score"
+              minValue={scoreMinInput}
+              maxValue={scoreMaxInput}
+              minPlaceholder={String(domains.meta.scoreRange.min)}
+              maxPlaceholder={String(domains.meta.scoreRange.max)}
+              onMinChange={setScoreMinInput}
+              onMaxChange={setScoreMaxInput}
+            />
+            <RangeInputs
+              label="Tecken"
+              minValue={lengthMinInput}
+              maxValue={lengthMaxInput}
+              minPlaceholder={String(domains.meta.labelLengthRange.min)}
+              maxPlaceholder={String(domains.meta.labelLengthRange.max)}
+              onMinChange={setLengthMinInput}
+              onMaxChange={setLengthMaxInput}
+            />
+            <RangeInputs
+              label="Utgar om dagar"
+              minValue={expiryMinInput}
+              maxValue={expiryMaxInput}
+              minPlaceholder="0"
+              maxPlaceholder="30"
+              onMinChange={setExpiryMinInput}
+              onMaxChange={setExpiryMaxInput}
+            />
+            <RangeInputs
+              label="Varde SEK"
+              minValue={valueMinInput}
+              maxValue={valueMaxInput}
+              minPlaceholder={String(domains.meta.valueRange.min)}
+              maxPlaceholder={String(domains.meta.valueRange.max)}
+              onMinChange={setValueMinInput}
+              onMaxChange={setValueMaxInput}
+            />
+            <Button variant="secondary" className="self-end" type="submit">
+              Filtrera
+            </Button>
+          </form>
+
           <button
             onClick={() => updateParams({ watched: onlyWatched ? null : "1", page: "1" })}
             className={clsx(
@@ -319,6 +624,22 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
               </span>
             )}
           </button>
+
+          {userState.state.reviewed.length > 0 && (
+            <button
+              onClick={() => updateParams({ notreviewed: hideReviewed ? null : "1", page: "1" })}
+              className={clsx(
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                hideReviewed ? "border-fg bg-fg text-bg" : "bg-surface text-muted hover:bg-bg hover:text-fg",
+              )}
+            >
+              <Eye size={12} />
+              Dölj granskade
+              <span className={clsx("rounded px-1 tabular-nums", hideReviewed ? "bg-bg/20" : "bg-fg/10")}>
+                {userState.state.reviewed.length}
+              </span>
+            </button>
+          )}
 
           {allTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 border-l pl-2">
@@ -400,6 +721,9 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             <SortableTh className="w-52" active={sortKey === "score"} dir={sortDir} onClick={() => toggleSort("score")}>
               Score
             </SortableTh>
+            <SortableTh className="w-36" active={sortKey === "analysis"} dir={sortDir} onClick={() => toggleSort("analysis")}>
+              Analyssteg
+            </SortableTh>
             <SortableTh active={sortKey === "expires"} dir={sortDir} onClick={() => toggleSort("expires")}>
               Utgår
             </SortableTh>
@@ -415,7 +739,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
         <tbody>
           {pageRows.length === 0 && (
             <tr>
-              <Td colSpan={9} className="py-10 text-center text-sm text-muted">
+              <Td colSpan={10} className="py-10 text-center text-sm text-muted">
                 Inga domäner matchar filtren.
               </Td>
             </tr>
@@ -456,13 +780,16 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
                   </Link>
                 </Td>
                 <Td>
-                  <VerdictBadge verdict={domain.verdict} />
+                  <VerdictBadge verdict={domain.verdict} status={domain.status} analyzed={getDomainAnalysisSteps(domain).length > 0} />
                 </Td>
                 <Td>
-                  <ScoreBar score={domain.totalScore} showValue />
+                  <ScoreBar score={domain.totalScore} maxScore={domain.scoreMax} showValue />
                 </Td>
                 <Td>
-                  <ExpiryBadge expiresAt={domain.expiresAt} variant="long" />
+                  <AnalysisStepIndicator steps={getDomainAnalysisSteps(domain)} coverage={getDomainAnalysisCoverage(domain)} />
+                </Td>
+                <Td>
+                  <ExpiryBadge expiresAt={domain.expiresAt} source={domain.source} variant="long" />
                 </Td>
                 <Td className="text-xs capitalize text-muted">{domain.source.replace("-", " ")}</Td>
                 <Td className="text-right text-xs font-medium">{formatMoneyRange(domain.estimatedValue)}</Td>
@@ -492,12 +819,57 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
         </tbody>
       </Table>
 
-      {domains.total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-xs text-muted">
+      {domains.total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
           <div>
-            Visar {clampedPage * PAGE_SIZE + 1}–{Math.min((clampedPage + 1) * PAGE_SIZE, domains.total)} av {domains.total}
+            Visar {clampedPage * pageSize + 1}-{Math.min((clampedPage + 1) * pageSize, domains.total)} av {domains.total}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1">
+              <span className="mr-1">Per sida</span>
+              <div className="flex gap-1 rounded-lg border bg-surface p-1">
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setCustomPageSize("");
+                      updatePageSize(option);
+                    }}
+                    className={clsx(
+                      "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                      pageSize === option ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              <form
+                className="flex items-center gap-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  updatePageSize(Number(customPageSize) || pageSize);
+                }}
+              >
+                <Input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={customPageSize}
+                  onChange={(event) => setCustomPageSize(event.target.value)}
+                  placeholder="Custom"
+                  className={clsx(
+                    "h-8 w-24 px-2 text-xs",
+                    !PAGE_SIZE_OPTIONS.includes(pageSize as (typeof PAGE_SIZE_OPTIONS)[number]) && "border-fg/40",
+                  )}
+                />
+                <Button variant="secondary" className="h-8 px-2 text-xs" type="submit">
+                  OK
+                </Button>
+              </form>
+            </div>
+            <div className="flex items-center gap-1">
             <Button
               variant="secondary"
               className="h-8 px-2"
@@ -517,9 +889,109 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             >
               <ChevronRight size={14} />
             </Button>
+            </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RangeInputs({
+  label,
+  minValue,
+  maxValue,
+  minPlaceholder,
+  maxPlaceholder,
+  onMinChange,
+  onMaxChange,
+}: {
+  label: string;
+  minValue: string;
+  maxValue: string;
+  minPlaceholder: string;
+  maxPlaceholder: string;
+  onMinChange: (value: string) => void;
+  onMaxChange: (value: string) => void;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 text-[11px] font-medium text-muted">{label}</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Input
+          type="number"
+          min={0}
+          value={minValue}
+          onChange={(event) => onMinChange(event.target.value)}
+          placeholder={`Min ${minPlaceholder}`}
+          className="h-8 px-2 text-xs"
+        />
+        <Input
+          type="number"
+          min={0}
+          value={maxValue}
+          onChange={(event) => onMaxChange(event.target.value)}
+          placeholder={`Max ${maxPlaceholder}`}
+          className="h-8 px-2 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
+function getDomainAnalysisSteps(domain: DomainAnalysis) {
+  return analysisStepMeta
+    .filter((step) => {
+      const category = domain.categories[step.id];
+      return category.score > 0 || category.signals.length > 0 || Boolean(category.verdict);
+    })
+    .map((step) => step.id);
+}
+
+function getDomainAnalysisCoverage(domain: DomainAnalysis): Partial<Record<AnalysisCategory, number>> {
+  return analysisStepMeta.reduce<Partial<Record<AnalysisCategory, number>>>((acc, step) => {
+    const category = domain.categories[step.id];
+    if (category.subAnalyses?.length) {
+      const total = category.subAnalyses.reduce((sum, item) => sum + item.maxScore, 0);
+      const available = category.subAnalyses.filter((item) => item.status === "complete").reduce((sum, item) => sum + item.maxScore, 0);
+      acc[step.id] = total > 0 ? Math.round((available / total) * 100) : 0;
+    } else {
+      acc[step.id] = Math.max(0, Math.min(100, category.scoreMax ?? 0));
+    }
+    return acc;
+  }, {});
+}
+
+function AnalysisStepIndicator({
+  steps,
+  coverage,
+}: {
+  steps: AnalysisCategory[];
+  coverage?: Partial<Record<AnalysisCategory, number>>;
+}) {
+  const completed = new Set(steps);
+  const label = steps.length > 0
+    ? `Analyserad: ${analysisStepMeta.filter((step) => completed.has(step.id)).map((step) => step.label).join(", ")}`
+    : "Ej analyserad";
+
+  return (
+    <div className="flex items-center gap-1" title={label} aria-label={label}>
+      {analysisStepMeta.map((step) => {
+        const pct = coverage?.[step.id] ?? (completed.has(step.id) ? 100 : 0);
+        return (
+          <span
+            key={step.id}
+            className={clsx(
+              "h-1.5 w-3 rounded-full transition-colors",
+              pct >= 100 ? "bg-fg/70" : pct > 0 ? "bg-fg/35" : "bg-fg/10",
+            )}
+            title={`${step.label}: ${pct}% tackning`}
+          />
+        );
+      })}
+      <span className="ml-1 text-[10px] font-medium tabular-nums text-muted">
+        {steps.length}/8
+      </span>
     </div>
   );
 }
@@ -705,6 +1177,19 @@ function AnalyzeQueueDialog({
                   >
                     <div className="text-sm font-medium">{step.label}</div>
                     <div className="mt-0.5 text-xs text-muted">{step.hint}</div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {analysisStepRequirements[step.id].map((requirement) => (
+                        <span
+                          key={requirement}
+                          className={clsx(
+                            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                            active ? "border-fg/15 bg-bg/60 text-fg/80" : "bg-bg text-muted",
+                          )}
+                        >
+                          {requirement}
+                        </span>
+                      ))}
+                    </div>
                   </button>
                 );
               })}

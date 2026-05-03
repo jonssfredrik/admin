@@ -126,3 +126,124 @@ model DriveActivity {
 
   @@index([itemId])
 }
+
+model BillingCompany {
+  id          String           @id
+  name        String
+  orgNumber   String?
+  vatNumber   String?
+  email       String?
+  phone       String?
+  address     String?
+  postalCode  String?
+  city        String?
+  bank        String?
+  iban        String?
+  bankgiro    String?
+  logoDataUrl String?
+  fSkatt      Boolean          @default(false)
+  isDefault   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  invoices    BillingInvoice[]
+}
+
+model BillingCustomer {
+  id            String           @id
+  name          String
+  orgNumber     String?
+  email         String?
+  phone         String?
+  address       String?
+  postalCode    String?
+  city          String?
+  contactPerson String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  invoices      BillingInvoice[]
+}
+
+model BillingInvoice {
+  id                    String               @id
+  companyId             String
+  company               BillingCompany       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customerId            String?
+  customer              BillingCustomer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName          String
+  customerOrgNumber     String?
+  customerEmail         String?
+  customerPhone         String?
+  customerAddress       String?
+  customerPostalCode    String?
+  customerCity          String?
+  customerContactPerson String?
+  status                String
+  vatRate               Float
+  currency              String               @default("SEK")
+  dueDate               String
+  issuedDate            String
+  paidDate              String?
+  paymentTermsDays      Int?
+  notes                 String?
+  theirReference        String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  lines                 BillingInvoiceLine[]
+
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model BillingInvoiceLine {
+  id            String         @id
+  invoiceId     String
+  invoice       BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  position      Int
+  description   String
+  quantity      Float
+  unit          String?
+  unitPriceOre  Int
+  articleNumber String?
+
+  @@index([invoiceId])
+}
+
+model Subscription {
+  id                 String                   @id
+  name               String
+  description        String                   @default("")
+  category           String
+  status             String
+  amountSEK          Int
+  billingCycle       String
+  startedAt          String
+  nextRenewal        String
+  cancelledAt        String?
+  website            String?
+  notes              String?
+  owner              String?
+  businessExpense    Boolean                  @default(false)
+  reminderDaysBefore Int?
+  archived           Boolean                  @default(false)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  priceHistory       SubscriptionPricePoint[]
+
+  @@index([status])
+  @@index([category])
+  @@index([nextRenewal])
+  @@index([archived])
+}
+
+model SubscriptionPricePoint {
+  id             String       @id
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  date           String
+  amountSEK      Int
+  createdAt      DateTime     @default(now())
+
+  @@unique([subscriptionId, date])
+  @@index([subscriptionId])
+}

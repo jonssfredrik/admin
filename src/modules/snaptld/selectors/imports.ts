@@ -1,4 +1,5 @@
 import type { ImportedDomainRecord } from "@/modules/snaptld/types";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
 export type ImportedSortKey = "domain" | "status" | "source" | "importedAt" | "expiresAt" | "score" | "verdict";
 export type ImportedSortDir = "asc" | "desc";
@@ -65,7 +66,7 @@ export function getImportedRows(
         case "expiresAt":
           return a.expiresAt.localeCompare(b.expiresAt) * dir;
         case "score":
-          return (a.totalScore - b.totalScore) * dir;
+          return (rankingScore(a) - rankingScore(b)) * dir;
         case "verdict":
           return a.verdict.localeCompare(b.verdict) * dir;
         case "importedAt":

@@ -1,6 +1,7 @@
 import type { DomainAnalysis, Verdict } from "@/modules/snaptld/types";
 import type { FeedSource } from "@/modules/snaptld/types";
 import { verdictMeta } from "@/modules/snaptld/data/core";
+import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
 const verdictColors: Record<Verdict, string> = {
   excellent: "#10b981",
@@ -18,14 +19,16 @@ export function getOverviewStats(domains: DomainAnalysis[]) {
   const analyzedToday = analyzedDomains.filter((domain) => domain.fetchedAt.startsWith(todayKey)).length;
   const excellent = analyzedDomains.filter((domain) => domain.verdict === "excellent").length;
   const good = analyzedDomains.filter((domain) => domain.verdict === "good").length;
-  const avg = total > 0 ? Math.round(analyzedDomains.reduce((sum, domain) => sum + domain.totalScore, 0) / total) : 0;
-  return { total, totalDomains, importedToday, analyzedToday, excellent, good, avg };
+  const mediocre = analyzedDomains.filter((domain) => domain.verdict === "mediocre").length;
+  const skip = analyzedDomains.filter((domain) => domain.verdict === "skip").length;
+  const avg = total > 0 ? Math.round(analyzedDomains.reduce((sum, domain) => sum + rankingScore(domain), 0) / total) : 0;
+  return { total, totalDomains, importedToday, analyzedToday, excellent, good, mediocre, skip, avg };
 }
 
 export function getTopCandidates(domains: DomainAnalysis[], limit = 5) {
   return [...domains]
     .filter((domain) => domain.status === "analyzed")
-    .sort((a, b) => b.totalScore - a.totalScore)
+    .sort((a, b) => rankingScore(b) - rankingScore(a))
     .slice(0, limit);
 }
 

@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 export default async function Page({ params }: { params: Promise<{ domain: string }> }) {
   const { domain: slug } = await params;
   const repository = getSnapTldRepository();
-  const [domain, domains, initialUserState] = await Promise.all([
+  const [domain, domainPage, initialUserState] = await Promise.all([
     repository.getDomainBySlug(slug),
-    repository.listDomains(),
+    repository.listDomainPage({ page: 1, pageSize: 200, sortKey: "score", sortDir: "desc" }),
     getInitialSnapTldUserState(),
   ]);
 
@@ -18,7 +18,7 @@ export default async function Page({ params }: { params: Promise<{ domain: strin
   return (
     <DomainDetailPage
       domain={domain}
-      domains={domains}
+      domains={domainPage.items}
       activeWeightsYaml={initialUserState.activeWeightsYaml}
       initialUserState={initialUserState}
     />

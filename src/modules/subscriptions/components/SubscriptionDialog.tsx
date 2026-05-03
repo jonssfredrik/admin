@@ -8,10 +8,8 @@ import {
   categoryMeta,
   cycleLabel,
   ownerMeta,
-  paymentMethodMeta,
   type BillingCycle,
   type OwnerScope,
-  type PaymentMethod,
   type Subscription,
   type SubscriptionCategory,
   type SubscriptionStatus,
@@ -20,7 +18,7 @@ import {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Subscription, "id">) => void;
+  onSave: (data: Omit<Subscription, "id">) => void | Promise<void>;
   initial?: Subscription;
 }
 
@@ -35,7 +33,6 @@ const EMPTY: Omit<Subscription, "id"> = {
   nextRenewal: "",
   website: "",
   notes: "",
-  paymentMethod: "card",
   owner: "private",
   businessExpense: false,
   reminderDaysBefore: 7,
@@ -49,7 +46,6 @@ const statuses: { value: SubscriptionStatus; label: string }[] = [
   { value: "paused", label: "Pausad" },
   { value: "cancelled", label: "Avslutad" },
 ];
-const paymentMethods = Object.entries(paymentMethodMeta) as [PaymentMethod, { label: string }][];
 const owners = Object.entries(ownerMeta) as [OwnerScope, { label: string; tone: string }][];
 
 const selectCls =
@@ -67,9 +63,9 @@ export function SubscriptionDialog({ open, onClose, onSave, initial }: Props) {
 
   const valid = form.name.trim() !== "" && form.amountSEK > 0 && form.nextRenewal !== "";
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!valid) return;
-    onSave(form);
+    await onSave(form);
     onClose();
   };
 
@@ -225,20 +221,7 @@ export function SubscriptionDialog({ open, onClose, onSave, initial }: Props) {
         </div>
 
         {/* Row 5 — payment + owner + reminder */}
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label htmlFor="sub-payment">Betalmetod</Label>
-            <select
-              id="sub-payment"
-              className={selectCls}
-              value={form.paymentMethod ?? "card"}
-              onChange={(e) => set("paymentMethod", e.target.value as PaymentMethod)}
-            >
-              {paymentMethods.map(([val, meta]) => (
-                <option key={val} value={val}>{meta.label}</option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="sub-owner">Typ</Label>
             <select

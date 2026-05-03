@@ -24,3 +24,6 @@ storage/
 screenshots/
 test-results/
 playwright-report/
+
+# OpenAI request/response debug logs
+logs/

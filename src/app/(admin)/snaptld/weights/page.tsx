@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const repository = getSnapTldRepository();
-  const [domains, initialUserState] = await Promise.all([
-    repository.listDomains(),
+  const [domainPage, initialUserState] = await Promise.all([
+    repository.listDomainPage({ page: 1, pageSize: 200, sortKey: "score", sortDir: "desc" }),
     getInitialSnapTldUserState(),
   ]);
 
-  return <WeightsPage domains={domains} initialYaml={initialUserState.activeWeightsYaml} />;
+  return <WeightsPage domains={domainPage.items} initialYaml={initialUserState.activeWeightsYaml} />;
 }
