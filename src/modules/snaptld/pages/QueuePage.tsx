@@ -24,7 +24,6 @@ import { Input } from "@/components/ui/Input";
 import { Table, Th, Td } from "@/components/ui/Table";
 import { RowMenu } from "@/components/ui/RowMenu";
 import { Button } from "@/components/ui/Button";
-import { Dialog } from "@/components/ui/Dialog";
 import { Label } from "@/components/ui/Input";
 import { useToast } from "@/components/toast/ToastProvider";
 import { ScoreBar } from "@/modules/snaptld/components/ScoreBar";
@@ -55,19 +54,10 @@ const statusFilters: Array<{ id: "all" | DomainAnalysis["status"]; label: string
   { id: "failed", label: "Misslyckad" },
 ];
 
-const scoreRangeFilters = [
-  { id: "all", label: "Alla scores", min: "", max: "" },
-  { id: "under-40", label: "<40", min: "", max: "39" },
-  { id: "40-50", label: "40-50", min: "40", max: "50" },
-  { id: "50-60", label: "50-60", min: "50", max: "60" },
-  { id: "60-70", label: "60-70", min: "60", max: "70" },
-  { id: "70-80", label: "70-80", min: "70", max: "80" },
-  { id: "80-plus", label: "80+", min: "80", max: "" },
-] as const;
-
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
 type AnalysisStep = AnalyzeQueueInput["steps"][number];
+type SelectedSubAnalyses = NonNullable<AnalyzeQueueInput["selectedSubAnalyses"]>;
 
 const analysisStepMeta: Array<{ id: AnalysisCategory; label: string; short: string }> = [
   { id: "structure", label: "Struktur", short: "St" },
@@ -104,6 +94,63 @@ const analysisStepRequirements: Record<AnalysisStep, string[]> = {
   history: ["WHOIS/RDAP-natverksanrop", "Wayback API for snapshots"],
 };
 
+const analysisSubStepMeta: Record<AnalysisCategory, Array<{
+  id: string;
+  label: string;
+  hint: string;
+  maxScore: number;
+  apiLabel: string;
+  usesApiKey: boolean;
+}>> = {
+  structure: [
+    { id: "structure-local", label: "Lokal struktur", hint: "Langd, tecken, segmentering och form", maxScore: 100, apiLabel: "Lokal", usesApiKey: false },
+  ],
+  lexical: [
+    { id: "lexicon-local", label: "Svenskt lexikon", hint: "Ordtraff, begriplighet och sprakkansla", maxScore: 100, apiLabel: "Lokal", usesApiKey: false },
+  ],
+  brand: [
+    { id: "brand-local", label: "Lokal brandbarhet", hint: "Langd, uttal, generiskhet och namnkansla", maxScore: 70, apiLabel: "Lokal", usesApiKey: false },
+    { id: "brand-ai", label: "AI-varumarkesbedomning", hint: "Extern AI-bedomning av varumarkespotential", maxScore: 30, apiLabel: "OpenAI API", usesApiKey: true },
+  ],
+  market: [
+    { id: "market-local", label: "Lokal nischmatchning", hint: "Svenska ord och kommersiella synonymkluster", maxScore: 60, apiLabel: "Lokal", usesApiKey: false },
+    { id: "market-ai", label: "AI-marknadsbedomning", hint: "Extern AI-bedomning av malgrupp och intent", maxScore: 40, apiLabel: "OpenAI API", usesApiKey: true },
+  ],
+  risk: [
+    { id: "risk-local", label: "Sprakliga riskflaggor", hint: "Lokala ord- och tolkningsrisker", maxScore: 50, apiLabel: "Lokal", usesApiKey: false },
+    { id: "risk-trademark", label: "Extern varumarkeskontroll", hint: "AI-hjalpt riskunderlag for varumarke", maxScore: 50, apiLabel: "OpenAI API", usesApiKey: true },
+  ],
+  salability: [
+    { id: "salability-local", label: "Lokal saljbarhet", hint: "Begriplighet, marknadsstod och rimlig langd", maxScore: 60, apiLabel: "Lokal", usesApiKey: false },
+    { id: "salability-ai", label: "AI-koparanalys", hint: "Extern AI-bedomning av kopare och flip-potential", maxScore: 40, apiLabel: "OpenAI API", usesApiKey: true },
+  ],
+  seo: [
+    { id: "seo-keyword-local", label: "Lokal keyword-relevans", hint: "Sokordssignaler fran lokala lexikon", maxScore: 35, apiLabel: "Lokal", usesApiKey: false },
+    { id: "seo-moz", label: "Moz DA/PA och backlinks", hint: "Extern lank- och auktoritetsdata", maxScore: 65, apiLabel: "Moz API", usesApiKey: true },
+  ],
+  history: [
+    { id: "history-whois", label: "WHOIS-alder (RDAP)", hint: "Registreringsdatum och alderssignal", maxScore: 50, apiLabel: "RDAP", usesApiKey: false },
+    { id: "history-wayback", label: "Wayback-snapshots", hint: "Tidigare innehall och arkivhistorik", maxScore: 50, apiLabel: "Wayback API", usesApiKey: true },
+  ],
+};
+
+function buildDefaultSelectedSubAnalyses(): SelectedSubAnalyses {
+  return analysisStepMeta.reduce<SelectedSubAnalyses>((acc, step) => {
+    acc[step.id] = analysisSubStepMeta[step.id].map((subStep) => subStep.id);
+    return acc;
+  }, {});
+}
+
+const analysisSubStepOptions = analysisStepMeta.flatMap((step) =>
+  analysisSubStepMeta[step.id].map((subStep) => ({
+    category: step.id,
+    categoryLabel: step.label,
+    id: subStep.id,
+    label: subStep.label,
+    apiLabel: subStep.apiLabel,
+  })),
+);
+
 export function QueuePage({
   domains,
   initialUserState,
@@ -137,6 +184,8 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
   const maxScore = Number(searchParams.get("smax") ?? 0);
   const minDaysUntilExpiry = Number(searchParams.get("emin") ?? 0);
   const maxDaysUntilExpiry = Number(searchParams.get("emax") ?? searchParams.get("expiry") ?? 0);
+  const importedAfter = searchParams.get("iafter") ?? "";
+  const importedBefore = searchParams.get("ibefore") ?? "";
   const domainLength = searchParams.get("len") ?? "all";
   const minDomainLength = Number(searchParams.get("lmin") ?? 0);
   const maxDomainLength = Number(searchParams.get("lmax") ?? 0);
@@ -144,6 +193,8 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
   const maxValue = Number(searchParams.get("vmax") ?? 0);
   const analysisStepMode = (searchParams.get("amode") as "all" | "none" | "complete" | "has" | "missing" | null) ?? "all";
   const analysisStep = (searchParams.get("astep") as AnalysisCategory | null) ?? "seo";
+  const subAnalysisMode = (searchParams.get("samode") as "all" | "has" | "missing" | null) ?? "all";
+  const subAnalysisId = searchParams.get("sasub") ?? "brand-local";
   const sortKey = (searchParams.get("sort") as QueueSortKey | null) ?? "score";
   const sortDir = (searchParams.get("dir") as QueueSortDir | null) ?? "desc";
   const [query, setQuery] = useState(queryParam);
@@ -153,15 +204,26 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
   const [lengthMaxInput, setLengthMaxInput] = useState(searchParams.get("lmax") ?? "");
   const [expiryMinInput, setExpiryMinInput] = useState(searchParams.get("emin") ?? "");
   const [expiryMaxInput, setExpiryMaxInput] = useState(searchParams.get("emax") ?? searchParams.get("expiry") ?? "");
+  const [importedAfterInput, setImportedAfterInput] = useState(importedAfter);
+  const [importedBeforeInput, setImportedBeforeInput] = useState(importedBefore);
   const [valueMinInput, setValueMinInput] = useState(searchParams.get("vmin") ?? "");
   const [valueMaxInput, setValueMaxInput] = useState(searchParams.get("vmax") ?? "");
   const [customPageSize, setCustomPageSize] = useState(PAGE_SIZE_OPTIONS.includes(domains.pageSize as (typeof PAGE_SIZE_OPTIONS)[number]) ? "" : String(domains.pageSize));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [analyzingQueue, setAnalyzingQueue] = useState(false);
-  const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"filters" | "analysis">("filters");
 
   const pageRows = domains.items;
   const pageSize = domains.pageSize;
+  const scoreRangeFilters = [
+    { id: "all", label: "Alla scores", min: "", max: "" },
+    ...domains.meta.scoreBuckets.map((bucket) => ({
+      id: `${bucket.min ?? ""}-${bucket.max ?? ""}`,
+      label: bucket.label,
+      min: bucket.min === null ? "" : String(bucket.min),
+      max: bucket.max === null ? "" : String(bucket.max),
+    })),
+  ];
   const uniqueTlds = domains.meta.uniqueTlds;
   const uniqueSources = domains.meta.uniqueSources;
   const pageCount = domains.totalPages;
@@ -229,12 +291,13 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
     const slugs = Array.from(selected);
     const rows = pageRows.filter((domain) => slugs.includes(domain.slug));
     const csv = [
-      "domain,score,verdict,expires,source,value_min,value_max,currency",
+      "domain,score,verdict,imported_at,expires,source,value_min,value_max,currency",
       ...rows.map((row) =>
         [
           row.domain,
           row.totalScore,
           row.verdict,
+          row.importedAt ?? "",
           row.expiresAt,
           row.source,
           row.estimatedValue.min,
@@ -262,9 +325,11 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
     setLengthMaxInput("");
     setExpiryMinInput("");
     setExpiryMaxInput("");
+    setImportedAfterInput("");
+    setImportedBeforeInput("");
     setValueMinInput("");
     setValueMaxInput("");
-    updateParams({ q: null, verdict: null, status: null, tld: null, src: null, tag: null, watched: null, hidden: null, notreviewed: null, smin: null, smax: null, emin: null, emax: null, expiry: null, len: null, lmin: null, lmax: null, vmin: null, vmax: null, amode: null, astep: null, page: null });
+    updateParams({ q: null, verdict: null, status: null, tld: null, src: null, tag: null, watched: null, hidden: null, notreviewed: null, smin: null, smax: null, emin: null, emax: null, expiry: null, iafter: null, ibefore: null, len: null, lmin: null, lmax: null, vmin: null, vmax: null, amode: null, astep: null, samode: null, sasub: null, page: null });
   };
 
   const allTags = Array.from(new Set(Object.values(userState.state.notes).flatMap((note) => note.tags))).sort();
@@ -281,12 +346,15 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
     (maxScore > 0 ? 1 : 0) +
     (minDaysUntilExpiry > 0 ? 1 : 0) +
     (maxDaysUntilExpiry > 0 ? 1 : 0) +
+    (importedAfter ? 1 : 0) +
+    (importedBefore ? 1 : 0) +
     (domainLength !== "all" ? 1 : 0) +
     (minDomainLength > 0 ? 1 : 0) +
     (maxDomainLength > 0 ? 1 : 0) +
     (minValue > 0 ? 1 : 0) +
     (maxValue > 0 ? 1 : 0) +
-    (analysisStepMode !== "all" ? 1 : 0);
+    (analysisStepMode !== "all" ? 1 : 0) +
+    (subAnalysisMode !== "all" ? 1 : 0);
 
   const applyCustomRanges = () => {
     updateParams({
@@ -296,6 +364,8 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
       lmax: lengthMaxInput.trim(),
       emin: expiryMinInput.trim(),
       emax: expiryMaxInput.trim(),
+      iafter: importedAfterInput.trim(),
+      ibefore: importedBeforeInput.trim(),
       vmin: valueMinInput.trim(),
       vmax: valueMaxInput.trim(),
       expiry: null,
@@ -323,7 +393,6 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
         result.analyzed > 0 ? "Analyskö körd" : "Inget att analysera",
         `${result.analyzed} analyserade · ${result.remaining} kvar`,
       );
-      setQueueDialogOpen(false);
       router.refresh();
     } catch (error) {
       toast.error("Kunde inte köra analyskön", error instanceof Error ? error.message : "Okänt fel");
@@ -333,18 +402,52 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="-my-6 -mr-8 grid min-h-[calc(100vh-3.5rem)] grid-cols-[minmax(0,1fr)_340px] gap-x-6">
+      <div className="col-start-1 py-6">
         <PageHeader
           title="Analyskö"
           subtitle="Alla analyserade domäner. Filtrera, sortera, markera och agera i grupp."
         />
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="secondary" className="gap-1.5" disabled={analyzingQueue} onClick={() => setQueueDialogOpen(true)}>
-            {analyzingQueue ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-            {analyzingQueue ? "Analyserar..." : "Kör analyskö"}
-          </Button>
-          <div className="flex items-center gap-3 text-xs text-muted">
+      </div>
+
+      <aside className="sticky top-[-1.5rem] col-start-2 row-start-1 row-span-2 flex h-[calc(100vh-3.5rem)] flex-col border-l bg-surface">
+        <div className="border-b p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">Analyskö</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                {domains.total} resultat{showHidden && " · visar dolda"}
+              </p>
+            </div>
+            {activeFilters > 0 && (
+              <button
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-bg hover:text-fg"
+              >
+                <X size={12} />
+                Rensa
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1 rounded-lg border bg-bg p-1">
+            {([
+              { id: "filters", label: "Filter" },
+              { id: "analysis", label: "Kör analys" },
+            ] as const).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSidebarTab(tab.id)}
+                className={clsx(
+                  "flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  sidebarTab === tab.id ? "bg-fg text-bg" : "text-muted hover:bg-surface hover:text-fg",
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted">
             {userState.state.reviewed.length > 0 && <span>{userState.state.reviewed.length} granskade</span>}
             {userState.state.hidden.length > 0 && (
               <button
@@ -357,10 +460,11 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             )}
           </div>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
+        <div className="space-y-4">
+          {sidebarTab === "filters" ? (
+            <>
           <form
             className="relative min-w-[240px] flex-1 max-w-sm"
             onSubmit={(event) => {
@@ -378,7 +482,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             />
           </form>
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="flex flex-wrap gap-1 rounded-lg border bg-surface p-1">
             {verdictFilters.map((filter) => (
               <button
                 key={filter.id}
@@ -393,7 +497,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             ))}
           </div>
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="flex flex-wrap gap-1 rounded-lg border bg-surface p-1">
             {statusFilters.map((filter) => (
               <button
                 key={filter.id}
@@ -440,7 +544,45 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             )}
           </div>
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="space-y-2 rounded-lg border bg-surface p-2">
+            <div className="flex flex-wrap items-center gap-1">
+              {([
+                { id: "all", label: "Alla subdelar" },
+                { id: "has", label: "Har subdel" },
+                { id: "missing", label: "Saknar subdel" },
+              ] as const).map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => updateParams({ samode: filter.id, sasub: filter.id === "has" || filter.id === "missing" ? subAnalysisId : null, page: "1" })}
+                  className={clsx(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    subAnalysisMode === filter.id ? "bg-fg text-bg" : "text-muted hover:bg-bg hover:text-fg",
+                  )}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            {(subAnalysisMode === "has" || subAnalysisMode === "missing") && (
+              <select
+                value={subAnalysisId}
+                onChange={(event) => updateParams({ sasub: event.target.value, page: "1" })}
+                className="w-full rounded-md border bg-bg px-2 py-1.5 text-xs outline-none focus:border-fg/30"
+              >
+                {analysisStepMeta.map((step) => (
+                  <optgroup key={step.id} label={step.label}>
+                    {analysisSubStepMeta[step.id].map((subStep) => (
+                      <option key={subStep.id} value={subStep.id}>
+                        {subStep.label} - {subStep.apiLabel}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-1 rounded-lg border bg-surface p-1">
             <button
               onClick={() => updateParams({ tld: "all", page: "1" })}
               className={clsx(
@@ -465,7 +607,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           </div>
 
           {uniqueSources.length > 1 && (
-            <div className="flex gap-1 rounded-lg border bg-surface p-1">
+            <div className="flex flex-wrap gap-1 rounded-lg border bg-surface p-1">
               <button
                 onClick={() => updateParams({ src: "all", page: "1" })}
                 className={clsx(
@@ -490,7 +632,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             </div>
           )}
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="flex flex-wrap gap-1 rounded-lg border bg-surface p-1">
             {([
               { id: "all", label: "Alla längder" },
               { id: "short", label: "Kort (≤7)" },
@@ -514,7 +656,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             ))}
           </div>
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="flex gap-1 flex-wrap rounded-lg border bg-surface p-1">
             {scoreRangeFilters.map((opt) => (
               <button
                 key={opt.id}
@@ -537,7 +679,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             ))}
           </div>
 
-          <div className="flex gap-1 rounded-lg border bg-surface p-1">
+          <div className="flex gap-1 flex-wrap rounded-lg border bg-surface p-1">
             {([
               { id: "0", label: "Alla datum" },
               { id: "7", label: "≤7d" },
@@ -562,7 +704,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           </div>
 
           <form
-            className="grid w-full gap-2 rounded-lg border bg-surface p-2 md:grid-cols-[repeat(4,minmax(160px,1fr))_auto]"
+            className="flex flex-col w-full gap-2 rounded-lg border bg-surface p-2"
             onSubmit={(event) => {
               event.preventDefault();
               applyCustomRanges();
@@ -595,6 +737,23 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
               onMinChange={setExpiryMinInput}
               onMaxChange={setExpiryMaxInput}
             />
+            <div>
+              <div className="mb-1 text-[11px] font-medium text-muted">Importerad</div>
+              <div className="grid grid-cols-2 gap-1">
+                <Input
+                  type="date"
+                  value={importedAfterInput}
+                  onChange={(event) => setImportedAfterInput(event.target.value)}
+                  aria-label="Importerad fran"
+                />
+                <Input
+                  type="date"
+                  value={importedBeforeInput}
+                  onChange={(event) => setImportedBeforeInput(event.target.value)}
+                  aria-label="Importerad till"
+                />
+              </div>
+            </div>
             <RangeInputs
               label="Varde SEK"
               minValue={valueMinInput}
@@ -668,13 +827,24 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
               Rensa filter
             </button>
           )}
-        </div>
         <div className="text-xs text-muted">
           {domains.total} resultat
           {showHidden && " · visar dolda"}
         </div>
+            </>
+          ) : (
+            <AnalysisQueuePanel
+              onRun={analyzeQueue}
+              pending={analyzingQueue}
+              selectedSlugs={Array.from(selected)}
+            />
+          )}
+      </div>
       </div>
 
+      </aside>
+
+      <div className="col-start-1 row-start-2 space-y-6 pb-6">
       {selected.size > 0 && (
         <div className="sticky top-4 z-20 flex items-center justify-between gap-3 rounded-xl border bg-fg text-bg shadow-pop px-4 py-2.5">
           <div className="flex items-center gap-3 text-sm">
@@ -691,14 +861,6 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           </div>
         </div>
       )}
-
-      <AnalyzeQueueDialog
-        open={queueDialogOpen}
-        onClose={() => setQueueDialogOpen(false)}
-        onRun={analyzeQueue}
-        pending={analyzingQueue}
-        selectedSlugs={Array.from(selected)}
-      />
 
       <Table>
         <thead>
@@ -724,8 +886,14 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
             <SortableTh className="w-36" active={sortKey === "analysis"} dir={sortDir} onClick={() => toggleSort("analysis")}>
               Analyssteg
             </SortableTh>
+            <SortableTh className="w-28" active={sortKey === "subanalysis"} dir={sortDir} onClick={() => toggleSort("subanalysis")}>
+              Subdelar
+            </SortableTh>
             <SortableTh active={sortKey === "expires"} dir={sortDir} onClick={() => toggleSort("expires")}>
               Utgår
+            </SortableTh>
+            <SortableTh active={sortKey === "imported"} dir={sortDir} onClick={() => toggleSort("imported")}>
+              Importerad
             </SortableTh>
             <SortableTh active={sortKey === "source"} dir={sortDir} onClick={() => toggleSort("source")}>
               Källa
@@ -739,7 +907,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
         <tbody>
           {pageRows.length === 0 && (
             <tr>
-              <Td colSpan={10} className="py-10 text-center text-sm text-muted">
+              <Td colSpan={12} className="py-10 text-center text-sm text-muted">
                 Inga domäner matchar filtren.
               </Td>
             </tr>
@@ -788,9 +956,14 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
                 <Td>
                   <AnalysisStepIndicator steps={getDomainAnalysisSteps(domain)} coverage={getDomainAnalysisCoverage(domain)} />
                 </Td>
+                <Td className="text-xs text-muted">
+                  <span className="font-medium tabular-nums text-fg">{domain.subAnalysisCount ?? domain.completedSubAnalysisIds?.length ?? 0}</span>
+                  <span className="text-muted">/{analysisSubStepOptions.length}</span>
+                </Td>
                 <Td>
                   <ExpiryBadge expiresAt={domain.expiresAt} source={domain.source} variant="long" />
                 </Td>
+                <Td className="text-xs text-muted">{domain.importedAt ? domain.importedAt.slice(0, 10) : "-"}</Td>
                 <Td className="text-xs capitalize text-muted">{domain.source.replace("-", " ")}</Td>
                 <Td className="text-right text-xs font-medium">{formatMoneyRange(domain.estimatedValue)}</Td>
                 <Td>
@@ -827,7 +1000,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1">
               <span className="mr-1">Per sida</span>
-              <div className="flex gap-1 rounded-lg border bg-surface p-1">
+              <div className="flex gap-1 flex-wrap rounded-lg border bg-surface p-1">
                 {PAGE_SIZE_OPTIONS.map((option) => (
                   <button
                     key={option}
@@ -893,6 +1066,7 @@ function QueuePageContent({ domains }: { domains: PaginatedResult<DomainAnalysis
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -996,15 +1170,11 @@ function AnalysisStepIndicator({
   );
 }
 
-function AnalyzeQueueDialog({
-  open,
-  onClose,
+function AnalysisQueuePanel({
   onRun,
   pending,
   selectedSlugs,
 }: {
-  open: boolean;
-  onClose: () => void;
   onRun: (input: AnalyzeQueueInput) => void | Promise<void>;
   pending: boolean;
   selectedSlugs: string[];
@@ -1018,12 +1188,31 @@ function AnalyzeQueueDialog({
   const [missingStep, setMissingStep] = useState<AnalysisCategory>("seo");
   const [sortBy, setSortBy] = useState<NonNullable<AnalyzeQueueInput["sortBy"]>>("oldest-imported");
   const [steps, setSteps] = useState<AnalysisStep[]>(["overview"]);
+  const [selectedSubAnalyses, setSelectedSubAnalyses] = useState<SelectedSubAnalyses>(() => buildDefaultSelectedSubAnalyses());
 
   const selectedAvailable = selectedSlugs.length > 0;
-  const canRun = steps.length > 0 && (scope !== "selected" || selectedAvailable);
+  const selectedCategories = steps.includes("overview")
+    ? analysisStepMeta.map((step) => step.id)
+    : steps.filter((step): step is AnalysisCategory => step !== "overview");
+  const selectedSubStepCount = selectedCategories.reduce((sum, category) => sum + (selectedSubAnalyses[category]?.length ?? 0), 0);
+  const canRun = steps.length > 0 && selectedSubStepCount > 0 && (scope !== "selected" || selectedAvailable);
 
   const toggleStep = (step: AnalysisStep) => {
     setSteps((current) => (current.includes(step) ? current.filter((item) => item !== step) : [...current, step]));
+  };
+
+  const toggleSubStep = (category: AnalysisCategory, subStepId: string) => {
+    setSelectedSubAnalyses((current) => {
+      const currentIds = current[category] ?? [];
+      const nextIds = currentIds.includes(subStepId)
+        ? currentIds.filter((id) => id !== subStepId)
+        : [...currentIds, subStepId];
+      return { ...current, [category]: nextIds };
+    });
+    setSteps((current) => {
+      if (current.includes("overview") || current.includes(category)) return current;
+      return [...current, category];
+    });
   };
 
   const run = () => {
@@ -1033,6 +1222,7 @@ function AnalyzeQueueDialog({
       slugs: scope === "selected" ? selectedSlugs : undefined,
       limit: limitMode === "all" ? "all" : limit,
       steps,
+      selectedSubAnalyses,
       sortBy,
       missingStep: scope === "missing-step" ? missingStep : null,
       dateFilter: dateMode === "any" ? null : { direction: dateMode, date },
@@ -1040,23 +1230,16 @@ function AnalyzeQueueDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={pending ? () => undefined : onClose}
-      title="Kör analyskö"
-      description="Välj vilka domäner som ska analyseras, i vilken ordning och vilka analyssteg som ska köras."
-      size="xl"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={pending}>Avbryt</Button>
-          <Button onClick={run} disabled={!canRun || pending} className="gap-1.5">
-            {pending ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-            {pending ? "Analyserar..." : "Starta körning"}
-          </Button>
-        </>
-      }
-    >
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-bg p-3">
+        <div className="text-sm font-semibold tracking-tight">Kör analys</div>
+        <div className="mt-1 text-xs text-muted">Välj vilka domäner som ska analyseras, ordning och analyssteg.</div>
+        <Button onClick={run} disabled={!canRun || pending} className="mt-3 w-full gap-1.5">
+          {pending ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+          {pending ? "Analyserar..." : "Starta körning"}
+        </Button>
+      </div>
+      <div className="space-y-4">
         <div className="space-y-4">
           <div>
             <Label>Urval</Label>
@@ -1160,23 +1343,36 @@ function AnalyzeQueueDialog({
           <div>
             <div className="flex items-center justify-between">
               <Label>Analyssteg</Label>
-              <span className="text-[11px] text-muted">{steps.length} valda</span>
+              <span className="text-[11px] text-muted">{steps.length} steg, {selectedSubStepCount} delar</span>
             </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid gap-2">
               {queueAnalysisSteps.map((step) => {
                 const active = steps.includes(step.id);
+                const category = step.id === "overview" ? null : step.id;
                 return (
-                  <button
+                  <div
                     key={step.id}
-                    type="button"
-                    onClick={() => toggleStep(step.id)}
                     className={clsx(
-                      "rounded-xl border p-3 text-left transition-colors",
+                      "rounded-xl border p-3 transition-colors",
                       active ? "border-fg bg-fg/5" : "hover:bg-bg/60",
                     )}
                   >
-                    <div className="text-sm font-medium">{step.label}</div>
-                    <div className="mt-0.5 text-xs text-muted">{step.hint}</div>
+                    <button type="button" onClick={() => toggleStep(step.id)} className="w-full text-left">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-medium">{step.label}</div>
+                          <div className="mt-0.5 text-xs text-muted">{step.hint}</div>
+                        </div>
+                        <span
+                          className={clsx(
+                            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                            active ? "border-fg/20 bg-fg text-bg" : "bg-bg text-muted",
+                          )}
+                        >
+                          {active ? "Vald" : "Av"}
+                        </span>
+                      </div>
+                    </button>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {analysisStepRequirements[step.id].map((requirement) => (
                         <span
@@ -1190,14 +1386,53 @@ function AnalyzeQueueDialog({
                         </span>
                       ))}
                     </div>
-                  </button>
+                    {category && (
+                      <div className="mt-3 grid gap-1.5">
+                        {analysisSubStepMeta[category].map((subStep) => {
+                          const subActive = (selectedSubAnalyses[category] ?? []).includes(subStep.id);
+                          return (
+                            <button
+                              key={subStep.id}
+                              type="button"
+                              onClick={() => toggleSubStep(category, subStep.id)}
+                              className={clsx(
+                                "rounded-lg border px-2.5 py-2 text-left transition-colors",
+                                subActive ? "border-fg/30 bg-bg" : "border-border/80 bg-surface/60 opacity-60 hover:opacity-100",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-xs font-semibold">{subStep.label}</div>
+                                  <div className="mt-0.5 text-[11px] text-muted">{subStep.hint}</div>
+                                </div>
+                                <span
+                                  className={clsx(
+                                    "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                                    subStep.usesApiKey
+                                      ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700",
+                                  )}
+                                >
+                                  {subStep.apiLabel}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-[10px] text-muted">
+                                <span>{subActive ? "Aktiv" : "Inaktiv"}</span>
+                                <span>Max {subStep.maxScore}p</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </div>
         </div>
       </div>
-    </Dialog>
+    </div>
   );
 }
 

@@ -74,10 +74,13 @@ export interface DomainAnalysis {
   tld: string;
   source: DomainSource;
   fetchedAt: string;
+  importedAt?: string;
   expiresAt: string;
   totalScore: number;
   scoreMax?: number;
   coverage?: number;
+  subAnalysisCount?: number;
+  completedSubAnalysisIds?: string[];
   verdict: Verdict;
   status: AnalysisStatus;
   categories: Record<AnalysisCategory, CategoryResult>;
@@ -218,6 +221,7 @@ export interface RunFeedsResult {
 export interface AnalyzeQueueInput {
   limit?: number | "all";
   steps: Array<"overview" | AnalysisCategory>;
+  selectedSubAnalyses?: Partial<Record<AnalysisCategory, string[]>>;
   scope: "queued" | "not-analyzed" | "all" | "missing-step" | "selected";
   slugs?: string[];
   dateFilter?: {
@@ -254,6 +258,11 @@ export interface QueuePageMeta {
     min: number;
     max: number;
   };
+  scoreBuckets: Array<{
+    label: string;
+    min: number | null;
+    max: number | null;
+  }>;
   labelLengthRange: {
     min: number;
     max: number;

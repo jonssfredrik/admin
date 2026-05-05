@@ -68,10 +68,23 @@ model SnapTldDomainAnalysis {
   tld                    String
   source                 String
   fetchedAt              DateTime
+  importedAt             DateTime @default(now())
   expiresAt              String
+  labelLength            Int      @default(0)
   totalScore             Int
   verdict                String
   status                 String
+  analysisStepCount      Int      @default(0)
+  subAnalysisCount       Int      @default(0)
+  completedSubAnalysisIds String  @default("")
+  hasStructure           Boolean  @default(false)
+  hasLexical             Boolean  @default(false)
+  hasBrand               Boolean  @default(false)
+  hasMarket              Boolean  @default(false)
+  hasRisk                Boolean  @default(false)
+  hasSalability          Boolean  @default(false)
+  hasSeo                 Boolean  @default(false)
+  hasHistory             Boolean  @default(false)
   aiSummary              String
   estimatedValueMin      Int
   estimatedValueMax      Int
@@ -83,6 +96,21 @@ model SnapTldDomainAnalysis {
   updatedAt              DateTime @updatedAt
 
   @@index([source])
+  @@index([importedAt])
+  @@index([status])
+  @@index([totalScore])
+  @@index([verdict])
+  @@index([labelLength])
+  @@index([analysisStepCount])
+  @@index([subAnalysisCount])
+  @@index([hasStructure])
+  @@index([hasLexical])
+  @@index([hasBrand])
+  @@index([hasMarket])
+  @@index([hasRisk])
+  @@index([hasSalability])
+  @@index([hasSeo])
+  @@index([hasHistory])
 }
 
 model DriveItem {

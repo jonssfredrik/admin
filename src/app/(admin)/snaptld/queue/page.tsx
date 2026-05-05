@@ -26,6 +26,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const maxScoreRaw = readNumberParam(params, "smax");
   const minDaysRaw = readNumberParam(params, "emin");
   const maxDaysRaw = readNumberParam(params, "emax") ?? readNumberParam(params, "expiry");
+  const importedAfter = readParam(params, "iafter");
+  const importedBefore = readParam(params, "ibefore");
   const minLengthRaw = readNumberParam(params, "lmin");
   const maxLengthRaw = readNumberParam(params, "lmax");
   const minValueRaw = readNumberParam(params, "vmin");
@@ -47,6 +49,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     maxScore: maxScoreRaw !== undefined && maxScoreRaw > 0 ? maxScoreRaw : undefined,
     minDaysUntilExpiry: minDaysRaw !== undefined && minDaysRaw >= 0 ? minDaysRaw : undefined,
     maxDaysUntilExpiry: maxDaysRaw !== undefined && maxDaysRaw >= 0 ? maxDaysRaw : undefined,
+    importedAfter: importedAfter && /^\d{4}-\d{2}-\d{2}$/.test(importedAfter) ? importedAfter : undefined,
+    importedBefore: importedBefore && /^\d{4}-\d{2}-\d{2}$/.test(importedBefore) ? importedBefore : undefined,
     domainLength: (readParam(params, "len") as "short" | "medium" | "long" | "all" | undefined) ?? "all",
     minDomainLength: minLengthRaw !== undefined && minLengthRaw > 0 ? minLengthRaw : undefined,
     maxDomainLength: maxLengthRaw !== undefined && maxLengthRaw > 0 ? maxLengthRaw : undefined,
@@ -54,7 +58,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     maxValue: maxValueRaw !== undefined && maxValueRaw > 0 ? maxValueRaw : undefined,
     analysisStepMode: (readParam(params, "amode") as "all" | "none" | "complete" | "has" | "missing" | undefined) ?? "all",
     analysisStep: (readParam(params, "astep") as AnalysisCategory | undefined) ?? null,
-    sortKey: (readParam(params, "sort") as "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | undefined) ?? "score",
+    subAnalysisMode: (readParam(params, "samode") as "all" | "has" | "missing" | undefined) ?? "all",
+    subAnalysisId: readParam(params, "sasub") ?? null,
+    sortKey: (readParam(params, "sort") as "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | "subanalysis" | "imported" | undefined) ?? "score",
     sortDir: (readParam(params, "dir") as "asc" | "desc" | undefined) ?? "desc",
     watchedSlugs: initialUserState.watchlist,
     hiddenSlugs: initialUserState.hidden,

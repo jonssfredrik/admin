@@ -29,9 +29,9 @@ interface NavigationCommand {
 
 const areaTitles: Record<AdminArea, string> = {
   hub: "Hem",
-  operations: "Drift",
-  business: "Affär",
-  workspace: "Arbetsyta",
+  operations: "Verktyg",
+  business: "Business",
+  workspace: "Admin Hub",
 };
 
 const coreRoutes: CoreRoute[] = [

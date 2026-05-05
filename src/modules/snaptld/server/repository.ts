@@ -43,7 +43,7 @@ import type {
   SubAnalysisResult,
 } from "@/modules/snaptld/types";
 
-type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis";
+type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | "subanalysis" | "imported";
 type SortDir = "asc" | "desc";
 type ImportedSortKey = "domain" | "status" | "source" | "importedAt" | "expiresAt" | "score" | "verdict";
 type AnalysisStep = AnalyzeQueueInput["steps"][number];
@@ -54,8 +54,23 @@ type PrismaDomainAnalysisSummaryRow = Pick<
   | "tld"
   | "source"
   | "fetchedAt"
+  | "importedAt"
   | "expiresAt"
+  | "labelLength"
+  | "totalScore"
+  | "verdict"
   | "status"
+  | "analysisStepCount"
+  | "subAnalysisCount"
+  | "completedSubAnalysisIds"
+  | "hasStructure"
+  | "hasLexical"
+  | "hasBrand"
+  | "hasMarket"
+  | "hasRisk"
+  | "hasSalability"
+  | "hasSeo"
+  | "hasHistory"
   | "aiSummary"
   | "estimatedValueMin"
   | "estimatedValueMax"
@@ -87,6 +102,8 @@ export interface DomainPageQuery {
   maxScore?: number;
   minDaysUntilExpiry?: number;
   maxDaysUntilExpiry?: number;
+  importedAfter?: string;
+  importedBefore?: string;
   domainLength?: "short" | "medium" | "long" | "all";
   minDomainLength?: number;
   maxDomainLength?: number;
@@ -94,6 +111,8 @@ export interface DomainPageQuery {
   maxValue?: number;
   analysisStepMode?: "all" | "none" | "complete" | "has" | "missing";
   analysisStep?: AnalysisCategory | null;
+  subAnalysisMode?: "all" | "has" | "missing";
+  subAnalysisId?: string | null;
   sortKey?: QueueSortKey;
   sortDir?: SortDir;
   watchedSlugs?: string[];
@@ -131,6 +150,7 @@ function buildQueuedAnalysis(domain: string, source: DomainAnalysis["source"], e
     tld,
     source,
     fetchedAt: new Date().toISOString(),
+    importedAt: new Date().toISOString(),
     expiresAt,
     totalScore: 0,
     verdict: "mediocre",
@@ -295,8 +315,30 @@ function hasApiKey(settings: SnapTldSettings, key?: string) {
   return Boolean(settings.apiKeys[key]?.trim());
 }
 
-function buildSubAnalyses(category: AnalysisCategory, localScore: number, settings: SnapTldSettings): SubAnalysisResult[] {
-  return categorySubAnalysisSpecs[category].map((spec) => {
+function getSelectedSubAnalysisIds(
+  category: AnalysisCategory,
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
+) {
+  const explicit = selectedSubAnalyses?.[category];
+  return new Set(explicit ?? categorySubAnalysisSpecs[category].map((spec) => spec.id));
+}
+
+function shouldRunSubAnalysis(
+  category: AnalysisCategory,
+  subAnalysisId: string,
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
+) {
+  return getSelectedSubAnalysisIds(category, selectedSubAnalyses).has(subAnalysisId);
+}
+
+function buildSubAnalyses(
+  category: AnalysisCategory,
+  localScore: number,
+  settings: SnapTldSettings,
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
+): SubAnalysisResult[] {
+  const selectedIds = getSelectedSubAnalysisIds(category, selectedSubAnalyses);
+  return categorySubAnalysisSpecs[category].filter((spec) => selectedIds.has(spec.id)).map((spec) => {
     if (spec.runAsync) {
       return {
         id: spec.id,
@@ -447,21 +489,27 @@ function buildLexiconCategoryScore(category: AnalysisCategory, profile: SwedishD
     return clamp(68 + (seed % 21) - 10, 18, 92);
   }
 
+  const weakSegmentationPenalty = profile.segmentationScore < 0.55 ? 28 : profile.segmentationScore < 0.72 ? 14 : 0;
+  const unclearMarketPenalty = profile.commercialIntent < 0.35 ? 24 : profile.commercialIntent < 0.6 ? 10 : 0;
+  const personPenalty = profile.personNameRisk ? 22 : 0;
+  const trademarkPenalty = profile.trademarkRisk ? 28 : 0;
+  const shortFragmentPenalty = Math.min(profile.weakSegments.length, 3) * 8;
+
   switch (category) {
     case "structure":
-      return clamp(Math.round(profile.lengthScore * 0.45 + profile.coverage * 35 + profile.pronounceability * 0.2 - (profile.hasHyphen ? 6 : 0) - (profile.hasDigits ? 10 : 0)), 20, 98);
+      return clamp(Math.round(profile.lengthScore * 0.45 + profile.segmentationScore * 35 + profile.pronounceability * 0.2 - shortFragmentPenalty - (profile.hasHyphen ? 6 : 0) - (profile.hasDigits ? 10 : 0)), 20, 98);
     case "lexical":
-      return clamp(Math.round(profile.coverage * 58 + profile.pronounceability * 0.24 + Math.min(profile.lemmas.length, 3) * 5 - profile.stopwordRatio * 28), 15, 98);
+      return clamp(Math.round(profile.qualityCoverage * 60 + profile.pronounceability * 0.18 + Math.min(profile.strongSegments.length, 3) * 4 - profile.stopwordRatio * 28 - shortFragmentPenalty - personPenalty * 0.3), 10, 98);
     case "brand":
-      return clamp(Math.round(profile.lengthScore * 0.38 + profile.pronounceability * 0.35 + (profile.coverage < 0.8 ? 12 : 4) - profile.stopwordRatio * 30 - (profile.hasDigits ? 12 : 0)), 15, 96);
+      return clamp(Math.round(profile.lengthScore * 0.32 + profile.pronounceability * 0.32 + (profile.qualityCoverage < 0.75 ? 10 : 2) + profile.commercialIntent * 10 - weakSegmentationPenalty - personPenalty - trademarkPenalty * 0.4 - profile.stopwordRatio * 30 - (profile.hasDigits ? 12 : 0)), 10, 96);
     case "market":
-      return clamp(Math.round(42 + Math.min(profile.marketCategories.length, 3) * 17 + Math.min(profile.synonymHits.length, 4) * 3 + profile.coverage * 12 - profile.stopwordRatio * 12), 20, 96);
+      return clamp(Math.round(18 + profile.commercialIntent * 48 + Math.min(profile.marketCategories.length, 2) * 8 + Math.min(profile.commercialTerms.length, 3) * 8 + profile.qualityCoverage * 8 - unclearMarketPenalty - personPenalty - trademarkPenalty * 0.25 - profile.stopwordRatio * 12), 8, 96);
     case "risk":
-      return clamp(Math.round(86 - profile.riskWords.length * 18 - profile.stopwordRatio * 12 - (profile.hasDigits ? 5 : 0)), 18, 96);
+      return clamp(Math.round(88 - profile.riskWords.length * 18 - (profile.trademarkRisk ? 38 : 0) - (profile.personNameRisk ? 12 : 0) - profile.stopwordRatio * 12 - (profile.hasDigits ? 5 : 0)), 10, 96);
     case "salability":
-      return clamp(Math.round(profile.lengthScore * 0.28 + profile.pronounceability * 0.22 + profile.coverage * 24 + Math.min(profile.marketCategories.length, 2) * 9 - profile.stopwordRatio * 22), 18, 97);
+      return clamp(Math.round(profile.lengthScore * 0.24 + profile.pronounceability * 0.18 + profile.qualityCoverage * 14 + profile.commercialIntent * 32 + Math.min(profile.marketCategories.length, 2) * 5 - unclearMarketPenalty - personPenalty - trademarkPenalty * 0.35 - profile.stopwordRatio * 22), 8, 97);
     case "seo":
-      return clamp(Math.round(38 + profile.coverage * 24 + Math.min(profile.marketCategories.length, 3) * 10 + Math.min(profile.synonymHits.length, 5) * 2), 18, 90);
+      return clamp(Math.round(18 + profile.commercialIntent * 32 + profile.qualityCoverage * 14 + Math.min(profile.marketCategories.length, 2) * 7 + Math.min(profile.commercialTerms.length, 3) * 4 - unclearMarketPenalty - personPenalty * 0.5), 5, 90);
     case "history": {
       const seed = hashValue(`history:${profile.label}`);
       return clamp(66 + (seed % 25) - 12, 18, 98);
@@ -474,29 +522,30 @@ function buildLexiconCategorySignals(category: AnalysisCategory, profile: Swedis
     case "structure":
       return [
         { label: "Längd", value: `${profile.label.length} tecken`, tone: scoreTone(profile.lengthScore) },
-        { label: "Segment", value: profile.segments.slice(0, 4).join(" + ") || "Okända", tone: profile.coverage >= 0.7 ? "success" : "warning" },
+        { label: "Segment", value: profile.segments.slice(0, 4).join(" + ") || "Okända", tone: profile.segmentationScore >= 0.72 ? "success" : profile.segmentationScore >= 0.5 ? "warning" : "danger" },
         { label: "Bindestreck", value: formatYesNo(profile.hasHyphen), tone: profile.hasHyphen ? "warning" : "success" },
       ];
     case "lexical":
       return [
-        { label: "Svenska ord", value: formatPercent(profile.coverage), tone: profile.coverage >= 0.7 ? "success" : profile.coverage >= 0.35 ? "warning" : "danger" },
-        { label: "Lemmor", value: profile.lemmas.slice(0, 4).join(", ") || "Saknas", tone: profile.lemmas.length > 0 ? "success" : "warning" },
+        { label: "Ord-kvalitet", value: formatPercent(profile.qualityCoverage), tone: profile.qualityCoverage >= 0.7 ? "success" : profile.qualityCoverage >= 0.35 ? "warning" : "danger" },
+        { label: "Starka ord", value: profile.strongSegments.slice(0, 4).join(", ") || "Saknas", tone: profile.strongSegments.length > 0 ? "success" : "warning" },
         { label: "Stoppord", value: profile.stopwords.length ? profile.stopwords.join(", ") : "Inga", tone: profile.stopwordRatio > 0.35 ? "warning" : "success" },
       ];
     case "brand":
       return [
         { label: "Minnesvärdhet", value: score >= 75 ? "Stark" : score >= 55 ? "Medel" : "Svag", tone: scoreTone(score) },
         { label: "Uttalbarhet", value: `${profile.pronounceability}/100`, tone: scoreTone(profile.pronounceability) },
-        { label: "Generiskhet", value: profile.coverage >= 0.9 ? "Hög" : "Lägre", tone: profile.coverage >= 0.9 ? "warning" : "success" },
+        { label: "Namn/brand-risk", value: profile.personNameRisk ? "Personnamn" : profile.trademarkRisk ? "Möjlig brandkrock" : "Låg", tone: profile.personNameRisk || profile.trademarkRisk ? "warning" : "success" },
       ];
     case "market":
       return [
         { label: "Nisch", value: profile.marketCategories.join(", ") || "Oklar", tone: profile.marketCategories.length > 0 ? "success" : "warning" },
-        { label: "Synonymer", value: profile.synonymHits.slice(0, 3).join(", ") || "Inga", tone: profile.synonymHits.length > 0 ? "success" : "neutral" },
+        { label: "Kommersiella ord", value: profile.commercialTerms.join(", ") || "Inga", tone: profile.commercialTerms.length > 0 ? "success" : "warning" },
       ];
     case "risk":
       return [
         { label: "Språklig risk", value: profile.riskWords.join(", ") || "Inga träffar", tone: profile.riskWords.length > 0 ? "warning" : "success" },
+        { label: "Brand/person", value: profile.trademarkRisk ? "Möjlig krock" : profile.personNameRisk ? "Personnamn" : "Inga träffar", tone: profile.trademarkRisk ? "danger" : profile.personNameRisk ? "warning" : "success" },
         { label: "Siffror", value: formatYesNo(profile.hasDigits), tone: profile.hasDigits ? "warning" : "success" },
       ];
     case "salability":
@@ -507,7 +556,7 @@ function buildLexiconCategorySignals(category: AnalysisCategory, profile: Swedis
     case "seo":
       return [
         { label: "Keyword-relevans", value: formatPercent(profile.coverage), tone: profile.coverage >= 0.6 ? "success" : "neutral" },
-        { label: "Sökintent", value: profile.marketCategories.join(", ") || "Oklar", tone: profile.marketCategories.length > 0 ? "success" : "neutral" },
+        { label: "Sökintent", value: profile.commercialTerms.join(", ") || profile.marketCategories.join(", ") || "Oklar", tone: profile.commercialIntent >= 0.5 ? "success" : "warning" },
       ];
     case "history":
       return [
@@ -539,18 +588,37 @@ function buildLexiconCategoryVerdict(category: AnalysisCategory, score: number, 
   }
 }
 
-function analyzeCategory(category: AnalysisCategory, domain: string, config: AnalysisConfig, settings: SnapTldSettings): CategoryResult {
+function analyzeCategory(
+  category: AnalysisCategory,
+  domain: string,
+  config: AnalysisConfig,
+  settings: SnapTldSettings,
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
+): CategoryResult {
   const profile = analyzeSwedishDomain(domain);
   const localScore = buildLexiconCategoryScore(category, profile);
-  const subAnalyses = buildSubAnalyses(category, localScore, settings);
+  const subAnalyses = buildSubAnalyses(category, localScore, settings, selectedSubAnalyses);
+  if (subAnalyses.length === 0) {
+    return {
+      score: 0,
+      scoreMax: 0,
+      weight: config.weights[category],
+      signals: [],
+      verdict: "",
+      subAnalyses: [],
+    };
+  }
   const score = scoreFromSubAnalyses(subAnalyses);
   const scoreMax = maxFromSubAnalyses(subAnalyses);
+  const selectedLocalSpecs = categorySubAnalysisSpecs[category].filter((spec) =>
+    subAnalyses.some((sub) => sub.id === spec.id) && !spec.requiresApiKey && !spec.runAsync
+  );
   return {
     score,
     scoreMax,
     weight: config.weights[category],
     signals: [
-      ...buildLexiconCategorySignals(category, profile, localScore),
+      ...(selectedLocalSpecs.length > 0 ? buildLexiconCategorySignals(category, profile, localScore) : []),
       ...subAnalyses
         .filter((item) => item.status !== "complete")
         .map((item): Signal => ({
@@ -559,7 +627,7 @@ function analyzeCategory(category: AnalysisCategory, domain: string, config: Ana
           tone: item.status === "failed" ? "danger" : "warning",
         })),
     ],
-    verdict: buildLexiconCategoryVerdict(category, localScore, domain, profile),
+    verdict: selectedLocalSpecs.length > 0 ? buildLexiconCategoryVerdict(category, localScore, domain, profile) : "",
     subAnalyses,
   };
 }
@@ -634,23 +702,27 @@ function normalizeCategories(categories: DomainAnalysis["categories"], options?:
 }
 
 function scoreDomainFromCategories(categories: DomainAnalysis["categories"]) {
-  let weightedEarned = 0;
-  let weightedMax = 0;
+  let weightedQuality = 0;
+  let qualityWeight = 0;
+  let weightedCoverage = 0;
   let totalWeight = 0;
 
   for (const key of analysisStepOrder) {
     const result = categories[key];
     totalWeight += result.weight;
-    weightedEarned += result.score * result.weight;
-    // Unanalyzed categories count against the full 100-point potential so that
-    // a domain scored on 2/8 steps cannot claim a high total score.
-    const effectiveMax = hasCategoryResult(result) ? (result.scoreMax ?? 100) : 100;
-    weightedMax += effectiveMax * result.weight;
+    if (hasCategoryResult(result) && (result.scoreMax ?? 0) > 0) {
+      weightedQuality += Math.min(100, Math.round((result.score / Math.max(1, result.scoreMax ?? 1)) * 100)) * result.weight;
+      qualityWeight += result.weight;
+      weightedCoverage += Math.min(100, result.scoreMax ?? 0) * result.weight;
+    }
   }
 
+  const coverage = totalWeight > 0 ? Math.round(weightedCoverage / totalWeight) : 0;
+  const quality = qualityWeight > 0 ? Math.round(weightedQuality / qualityWeight) : 0;
+  const confidenceFactor = coverage >= 80 ? 1 : coverage >= 55 ? 0.82 : coverage >= 35 ? 0.62 : coverage > 0 ? 0.35 : 0;
   return {
-    totalScore: totalWeight > 0 ? Math.round(weightedEarned / totalWeight) : 0,
-    scoreMax: totalWeight > 0 ? Math.round(weightedMax / totalWeight) : 0,
+    totalScore: Math.round(quality * confidenceFactor),
+    scoreMax: coverage,
   };
 }
 
@@ -702,6 +774,15 @@ function scoreToVerdict(score: number, config: AnalysisConfig) {
   return "skip";
 }
 
+function domainQualityScoreCap(domain: string) {
+  const profile = analyzeSwedishDomain(domain);
+  if (profile.trademarkRisk) return 42;
+  if (profile.personNameRisk && profile.commercialIntent < 0.55) return 38;
+  if (profile.segmentationScore < 0.45 && profile.commercialIntent < 0.35) return 35;
+  if (profile.commercialIntent < 0.25 && profile.genericWordIntent < 0.6 && profile.marketCategories.length === 0) return 55;
+  return 100;
+}
+
 function hasCategoryResult(result: CategoryResult) {
   return result.score > 0 || (result.scoreMax ?? 0) > 0 || result.signals.length > 0 || Boolean(result.verdict);
 }
@@ -721,7 +802,7 @@ function applyAiCategoryResult(
   ai: AiDomainAnalysis[AiCategory],
 ): CategoryResult {
   const subAnalyses = (result.subAnalyses ?? []).map((sub) =>
-    sub.id === subAnalysisId ? { ...sub, status: "complete" as const, score: ai.score } : sub,
+    sub.id === subAnalysisId ? { ...sub, status: "complete" as const, score: ai.score, reason: undefined } : sub,
   );
   const aiSubLabel = result.subAnalyses?.find((sub) => sub.id === subAnalysisId)?.label ?? "";
   const filteredSignals = result.signals.filter((sig) => sig.label !== aiSubLabel);
@@ -770,10 +851,11 @@ function runLocalCategories(
   steps: AnalysisCategory[],
   config: AnalysisConfig,
   settings: SnapTldSettings,
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
 ): Record<AnalysisCategory, CategoryResult> {
   const categories = normalizeCategories(domain.categories);
   for (const step of steps) {
-    categories[step] = analyzeCategory(step, domain.domain, config, settings);
+    categories[step] = analyzeCategory(step, domain.domain, config, settings, selectedSubAnalyses);
   }
   return categories;
 }
@@ -822,20 +904,21 @@ function finalizeDomain(
 ): DomainAnalysis {
   const now = new Date().toISOString();
   const { totalScore, scoreMax } = scoreDomainFromCategories(categories);
-  const rankScore = rankingScore({ totalScore, scoreMax });
+  const cappedTotalScore = Math.min(totalScore, domainQualityScoreCap(domain.domain));
+  const rankScore = rankingScore({ totalScore: cappedTotalScore, scoreMax });
   const next: DomainAnalysis = {
     ...domain,
     fetchedAt: now,
     status: "analyzed",
     categories,
-    totalScore,
+    totalScore: cappedTotalScore,
     scoreMax,
     coverage: scoreMax,
     verdict: scoreToVerdict(rankScore, config),
     aiSummary: "",
     estimatedValue: {
-      min: Math.max(0, totalScore * 120),
-      max: Math.max(0, totalScore * 240),
+      min: Math.max(0, cappedTotalScore * 120),
+      max: Math.max(0, cappedTotalScore * 240),
       currency: "SEK",
     },
     seo: domain.seo,
@@ -858,18 +941,22 @@ async function analyzeDomainAsync(
   requestedSteps: AnalysisStep[],
   config = defaultAnalysisConfig,
   settings = createDefaultSettings(),
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
 ): Promise<DomainAnalysis> {
   const steps = normalizeSteps(requestedSteps);
-  const categories = runLocalCategories(domain, steps, config, settings);
+  const categories = runLocalCategories(domain, steps, config, settings, selectedSubAnalyses);
 
   // WHOIS age (history step, no API key needed)
-  if (steps.includes("history")) {
+  if (steps.includes("history") && shouldRunSubAnalysis("history", "history-whois", selectedSubAnalyses)) {
     const whoisResult = await fetchWhoisAge(domain.domain);
     if (whoisResult) categories["history"] = applyWhoisResult(categories["history"], whoisResult);
   }
 
   const openaiKey = settings.apiKeys["openai"]?.trim();
-  const aiSteps = steps.filter((s): s is AiCategory => AI_CATEGORIES.includes(s as AiCategory));
+  const aiSteps = steps.filter((s): s is AiCategory =>
+    AI_CATEGORIES.includes(s as AiCategory)
+    && shouldRunSubAnalysis(s as AnalysisCategory, AI_CATEGORY_SPEC_IDS[s as AiCategory], selectedSubAnalyses)
+  );
   let aiSummaryText: string | null = null;
 
   if (openaiKey && aiSteps.length > 0) {
@@ -890,21 +977,25 @@ async function analyzeDomainsAsync(
   requestedSteps: AnalysisStep[],
   config = defaultAnalysisConfig,
   settings = createDefaultSettings(),
+  selectedSubAnalyses?: AnalyzeQueueInput["selectedSubAnalyses"],
 ): Promise<DomainAnalysis[]> {
   if (domains.length === 0) return [];
 
   const steps = normalizeSteps(requestedSteps);
-  const aiSteps = steps.filter((s): s is AiCategory => AI_CATEGORIES.includes(s as AiCategory));
+  const aiSteps = steps.filter((s): s is AiCategory =>
+    AI_CATEGORIES.includes(s as AiCategory)
+    && shouldRunSubAnalysis(s as AnalysisCategory, AI_CATEGORY_SPEC_IDS[s as AiCategory], selectedSubAnalyses)
+  );
   const openaiKey = settings.apiKeys["openai"]?.trim();
 
   // 1. Local analysis for all domains
   const localResults = domains.map((domain) => ({
     domain,
-    categories: runLocalCategories(domain, steps, config, settings),
+    categories: runLocalCategories(domain, steps, config, settings, selectedSubAnalyses),
   }));
 
   // 2. WHOIS age fetches (history step, parallel, no API key needed)
-  if (steps.includes("history")) {
+  if (steps.includes("history") && shouldRunSubAnalysis("history", "history-whois", selectedSubAnalyses)) {
     const whoisResults = await Promise.all(
       localResults.map(async ({ domain }) => ({
         domainName: domain.domain,
@@ -995,10 +1086,13 @@ function mapPrismaDomainAnalysis(row: PrismaDomainAnalysisRow, options?: Normali
     tld: row.tld,
     source: row.source as DomainAnalysis["source"],
     fetchedAt: row.fetchedAt.toISOString(),
+    importedAt: row.importedAt.toISOString(),
     expiresAt: row.expiresAt,
     totalScore,
     scoreMax,
     coverage: scoreMax,
+    subAnalysisCount: row.subAnalysisCount,
+    completedSubAnalysisIds: row.completedSubAnalysisIds.split("|").filter(Boolean),
     verdict: status === "analyzed" ? scoreToVerdict(rankScore, defaultAnalysisConfig) : (row.verdict as DomainAnalysis["verdict"]),
     status,
     aiSummary: row.aiSummary,
@@ -1025,10 +1119,13 @@ function mapPrismaDomainAnalysisSummary(row: PrismaDomainAnalysisSummaryRow, opt
     tld: row.tld,
     source: row.source as DomainAnalysis["source"],
     fetchedAt: row.fetchedAt.toISOString(),
+    importedAt: row.importedAt.toISOString(),
     expiresAt: row.expiresAt,
     totalScore,
     scoreMax,
     coverage: scoreMax,
+    subAnalysisCount: row.subAnalysisCount,
+    completedSubAnalysisIds: row.completedSubAnalysisIds.split("|").filter(Boolean),
     verdict: scoreToVerdict(rankScore, defaultAnalysisConfig),
     status: normalizeAnalysisStatus(row.status as DomainAnalysis["status"], categories),
     aiSummary: row.aiSummary,
@@ -1083,6 +1180,49 @@ function getAnalysisSteps(categories: DomainAnalysis["categories"]) {
     return category.score > 0 || category.signals.length > 0 || Boolean(category.verdict);
   });
 }
+
+function getCompletedSubAnalysisIds(categories: DomainAnalysis["categories"]) {
+  return analysisStepOrder.flatMap((key) =>
+    (categories[key].subAnalyses ?? [])
+      .filter((subAnalysis) => subAnalysis.status === "complete")
+      .map((subAnalysis) => subAnalysis.id),
+  );
+}
+
+function getLabelLength(domain: string) {
+  return (domain.split(".")[0] ?? domain).length;
+}
+
+function buildDomainAnalysisIndex(domain: Pick<DomainAnalysis, "domain" | "categories">) {
+  const steps = getAnalysisSteps(domain.categories);
+  const stepSet = new Set(steps);
+  const completedSubAnalysisIds = getCompletedSubAnalysisIds(domain.categories);
+  return {
+    labelLength: getLabelLength(domain.domain),
+    analysisStepCount: steps.length,
+    subAnalysisCount: completedSubAnalysisIds.length,
+    completedSubAnalysisIds: completedSubAnalysisIds.length ? `|${completedSubAnalysisIds.join("|")}|` : "",
+    hasStructure: stepSet.has("structure"),
+    hasLexical: stepSet.has("lexical"),
+    hasBrand: stepSet.has("brand"),
+    hasMarket: stepSet.has("market"),
+    hasRisk: stepSet.has("risk"),
+    hasSalability: stepSet.has("salability"),
+    hasSeo: stepSet.has("seo"),
+    hasHistory: stepSet.has("history"),
+  };
+}
+
+const analysisStepColumn: Record<AnalysisCategory, string> = {
+  structure: "hasStructure",
+  lexical: "hasLexical",
+  brand: "hasBrand",
+  market: "hasMarket",
+  risk: "hasRisk",
+  salability: "hasSalability",
+  seo: "hasSeo",
+  history: "hasHistory",
+};
 
 function hasAnalysisSteps(categories: DomainAnalysis["categories"]) {
   return getAnalysisSteps(categories).length > 0;
@@ -1168,6 +1308,8 @@ function sortDomains(domains: DomainAnalysis[], sortKey: QueueSortKey = "score",
         return a.verdict.localeCompare(b.verdict) * dir;
       case "expires":
         return a.expiresAt.localeCompare(b.expiresAt) * dir;
+      case "imported":
+        return (a.importedAt ?? "").localeCompare(b.importedAt ?? "") * dir;
       case "source":
         return a.source.localeCompare(b.source) * dir;
       case "value":
@@ -1213,6 +1355,8 @@ function filterDomains(domains: DomainAnalysis[], input: DomainPageQuery) {
       if (input.minDaysUntilExpiry !== undefined && input.minDaysUntilExpiry >= 0 && daysUntil < input.minDaysUntilExpiry) return false;
       if (input.maxDaysUntilExpiry !== undefined && input.maxDaysUntilExpiry >= 0 && daysUntil > input.maxDaysUntilExpiry) return false;
     }
+    if (input.importedAfter && (!domain.importedAt || domain.importedAt.slice(0, 10) < input.importedAfter)) return false;
+    if (input.importedBefore && (!domain.importedAt || domain.importedAt.slice(0, 10) > input.importedBefore)) return false;
 
     const labelLen = (domain.domain.split(".")[0] ?? domain.domain).length;
     if (input.domainLength && input.domainLength !== "all") {
@@ -1232,6 +1376,9 @@ function filterDomains(domains: DomainAnalysis[], input: DomainPageQuery) {
     if (input.analysisStepMode === "complete" && analysisSteps.length < analysisStepOrder.length) return false;
     if (input.analysisStepMode === "has" && (!input.analysisStep || !analysisStepSet.has(input.analysisStep))) return false;
     if (input.analysisStepMode === "missing" && (!input.analysisStep || analysisStepSet.has(input.analysisStep))) return false;
+    const completedSubAnalysisIds = new Set(domain.completedSubAnalysisIds ?? getCompletedSubAnalysisIds(domain.categories));
+    if (input.subAnalysisMode === "has" && (!input.subAnalysisId || !completedSubAnalysisIds.has(input.subAnalysisId))) return false;
+    if (input.subAnalysisMode === "missing" && (!input.subAnalysisId || completedSubAnalysisIds.has(input.subAnalysisId))) return false;
 
     if (query && !domain.domain.toLowerCase().includes(query) && !domain.source.toLowerCase().includes(query)) return false;
     return true;
@@ -1242,14 +1389,25 @@ function getQueueMeta(domains: DomainAnalysis[]): QueuePageMeta {
   const scores = domains.map((domain) => rankingScore(domain));
   const lengths = domains.map((domain) => (domain.domain.split(".")[0] ?? domain.domain).length);
   const values = domains.flatMap((domain) => [domain.estimatedValue.min, domain.estimatedValue.max]);
+  const minScore = scores.length > 0 ? Math.min(...scores) : 0;
+  const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
+  const scoreStep = Math.max(1, Math.ceil((maxScore - minScore + 1) / 5));
+  const scoreBuckets = maxScore <= minScore
+    ? [{ label: `${minScore}`, min: minScore, max: maxScore }]
+    : Array.from({ length: Math.ceil((maxScore - minScore + 1) / scoreStep) }, (_, index) => {
+        const min = minScore + index * scoreStep;
+        const max = Math.min(maxScore, min + scoreStep - 1);
+        return { label: min === max ? `${min}` : `${min}-${max}`, min, max };
+      });
   return {
     totalDomains: domains.length,
     uniqueTlds: Array.from(new Set(domains.map((domain) => domain.tld))).sort(),
     uniqueSources: Array.from(new Set(domains.map((domain) => domain.source))).sort() as DomainAnalysis["source"][],
     scoreRange: {
-      min: scores.length > 0 ? Math.min(...scores) : 0,
-      max: scores.length > 0 ? Math.max(...scores) : 0,
+      min: minScore,
+      max: maxScore,
     },
+    scoreBuckets,
     labelLengthRange: {
       min: lengths.length > 0 ? Math.min(...lengths) : 0,
       max: lengths.length > 0 ? Math.max(...lengths) : 0,
@@ -1361,16 +1519,7 @@ function canUseFastImportedPage(query: ImportedPageQuery) {
 }
 
 function canUseFastDomainPage(query: DomainPageQuery) {
-  const sortKey = query.sortKey ?? "score";
-  return (
-    sortKey !== "score" &&
-    sortKey !== "verdict" &&
-    (!query.verdict || query.verdict === "all") &&
-    !query.tagFilter &&
-    !query.onlyWatched &&
-    !query.showHidden &&
-    (query.hiddenSlugs?.length ?? 0) === 0
-  );
+  return true;
 }
 
 function buildPrismaDomainWhere(query: DomainPageQuery) {
@@ -1383,7 +1532,81 @@ function buildPrismaDomainWhere(query: DomainPageQuery) {
     ];
   }
   if (query.verdict && query.verdict !== "all") where.verdict = query.verdict;
+  if (query.status && query.status !== "all") where.status = query.status;
   if (query.tld && query.tld !== "all") where.tld = query.tld;
+  if (query.source && query.source !== "all") where.source = query.source;
+  let slugInclude: string[] | null = null;
+  const intersectSlugInclude = (slugs: string[]) => {
+    slugInclude = slugInclude === null ? slugs : slugInclude.filter((slug) => slugs.includes(slug));
+  };
+  if (query.onlyWatched) intersectSlugInclude(query.watchedSlugs ?? []);
+  if (query.tagFilter && query.notes) {
+    const tagged = Object.entries(query.notes)
+      .filter(([, note]) => note.tags.includes(query.tagFilter as string))
+      .map(([slug]) => slug);
+    intersectSlugInclude(tagged);
+  }
+  if (query.showHidden) intersectSlugInclude(query.hiddenSlugs ?? []);
+  const notIn = [
+    ...(!query.showHidden ? query.hiddenSlugs ?? [] : []),
+    ...(query.hideReviewed ? query.reviewedSlugs ?? [] : []),
+  ];
+  if (slugInclude !== null || notIn.length > 0) {
+    where.slug = {
+      ...(slugInclude !== null ? { in: slugInclude } : {}),
+      ...(notIn.length > 0 ? { notIn } : {}),
+    };
+  }
+  const totalScore: Record<string, number> = {};
+  if (query.minScore !== undefined && query.minScore > 0) totalScore.gte = query.minScore;
+  if (query.maxScore !== undefined && query.maxScore > 0) totalScore.lte = query.maxScore;
+  if (Object.keys(totalScore).length > 0) where.totalScore = totalScore;
+  if (query.minDaysUntilExpiry !== undefined || query.maxDaysUntilExpiry !== undefined) {
+    const expiresAt: Record<string, string> = {};
+    if (query.minDaysUntilExpiry !== undefined && query.minDaysUntilExpiry >= 0) {
+      const minDate = new Date(Date.now() + query.minDaysUntilExpiry * 86_400_000).toISOString().slice(0, 10);
+      expiresAt.gte = minDate;
+    }
+    if (query.maxDaysUntilExpiry !== undefined && query.maxDaysUntilExpiry >= 0) {
+      const maxDate = new Date(Date.now() + query.maxDaysUntilExpiry * 86_400_000).toISOString().slice(0, 10);
+      expiresAt.lte = maxDate;
+    }
+    where.expiresAt = expiresAt;
+  }
+  if (query.importedAfter || query.importedBefore) {
+    const importedAt: Record<string, Date> = {};
+    if (query.importedAfter) importedAt.gte = parseLooseDateTime(query.importedAfter);
+    if (query.importedBefore) {
+      const end = parseLooseDateTime(query.importedBefore);
+      end.setUTCDate(end.getUTCDate() + 1);
+      importedAt.lt = end;
+    }
+    where.importedAt = importedAt;
+  }
+  if (query.domainLength && query.domainLength !== "all") {
+    if (query.domainLength === "short") where.labelLength = { lte: 7 };
+    if (query.domainLength === "medium") where.labelLength = { gte: 8, lte: 12 };
+    if (query.domainLength === "long") where.labelLength = { gte: 13 };
+  }
+  const labelLength = { ...((where.labelLength as Record<string, number> | undefined) ?? {}) };
+  if (query.minDomainLength !== undefined && query.minDomainLength > 0) labelLength.gte = query.minDomainLength;
+  if (query.maxDomainLength !== undefined && query.maxDomainLength > 0) labelLength.lte = query.maxDomainLength;
+  if (Object.keys(labelLength).length > 0) where.labelLength = labelLength;
+  if (query.minValue !== undefined && query.minValue > 0) where.estimatedValueMax = { gte: query.minValue };
+  if (query.maxValue !== undefined && query.maxValue > 0) where.estimatedValueMin = { lte: query.maxValue };
+  if (query.analysisStepMode && query.analysisStepMode !== "all") {
+    if (query.analysisStepMode === "none") where.analysisStepCount = 0;
+    if (query.analysisStepMode === "complete") where.analysisStepCount = analysisStepOrder.length;
+    if ((query.analysisStepMode === "has" || query.analysisStepMode === "missing") && query.analysisStep) {
+      where[analysisStepColumn[query.analysisStep]] = query.analysisStepMode === "has";
+    }
+  }
+  if (query.subAnalysisMode && query.subAnalysisMode !== "all" && query.subAnalysisId) {
+    const token = `|${query.subAnalysisId}|`;
+    where.completedSubAnalysisIds = query.subAnalysisMode === "has"
+      ? { contains: token }
+      : { not: { contains: token } };
+  }
   return where;
 }
 
@@ -1398,12 +1621,61 @@ function buildPrismaDomainOrderBy(query: DomainPageQuery) {
       return { expiresAt: direction } as const;
     case "source":
       return { source: direction } as const;
+    case "imported":
+      return { importedAt: direction } as const;
     case "value":
       return { estimatedValueMin: direction } as const;
+    case "analysis":
+      return { analysisStepCount: direction } as const;
+    case "subanalysis":
+      return { subAnalysisCount: direction } as const;
     case "score":
     default:
       return { totalScore: direction } as const;
   }
+}
+
+async function getPrismaQueueMeta(): Promise<QueuePageMeta> {
+  const now = Date.now();
+  if (queueMetaCache && queueMetaCache.expiresAt > now) return queueMetaCache.meta;
+  const [totalDomains, tldRows, sourceRows, scoreAgg, valueAgg, lengthAgg] = await Promise.all([
+    prisma.snapTldDomainAnalysis.count(),
+    prisma.snapTldDomainAnalysis.findMany({ distinct: ["tld"], select: { tld: true }, orderBy: { tld: "asc" } }),
+    prisma.snapTldDomainAnalysis.findMany({ distinct: ["source"], select: { source: true }, orderBy: { source: "asc" } }),
+    prisma.snapTldDomainAnalysis.aggregate({ _min: { totalScore: true }, _max: { totalScore: true } }),
+    prisma.snapTldDomainAnalysis.aggregate({
+      _min: { estimatedValueMin: true },
+      _max: { estimatedValueMax: true },
+    }),
+    prisma.snapTldDomainAnalysis.aggregate({ _min: { labelLength: true }, _max: { labelLength: true } }),
+  ]);
+  const minScore = scoreAgg._min.totalScore ?? 0;
+  const maxScore = scoreAgg._max.totalScore ?? 0;
+  const scoreStep = Math.max(1, Math.ceil((maxScore - minScore + 1) / 5));
+  const scoreBuckets = maxScore <= minScore
+    ? [{ label: `${minScore}`, min: minScore, max: maxScore }]
+    : Array.from({ length: Math.ceil((maxScore - minScore + 1) / scoreStep) }, (_, index) => {
+        const min = minScore + index * scoreStep;
+        const max = Math.min(maxScore, min + scoreStep - 1);
+        return { label: min === max ? `${min}` : `${min}-${max}`, min, max };
+      });
+  const meta = {
+    totalDomains,
+    uniqueTlds: tldRows.map((row) => row.tld),
+    uniqueSources: sourceRows.map((row) => row.source as DomainAnalysis["source"]),
+    scoreRange: { min: minScore, max: maxScore },
+    scoreBuckets,
+    labelLengthRange: {
+      min: lengthAgg._min.labelLength ?? 0,
+      max: lengthAgg._max.labelLength ?? 0,
+    },
+    valueRange: {
+      min: valueAgg._min.estimatedValueMin ?? 0,
+      max: valueAgg._max.estimatedValueMax ?? 0,
+    },
+  };
+  queueMetaCache = { expiresAt: now + 60_000, meta };
+  return meta;
 }
 
 const domainAnalysisSummarySelect = {
@@ -1412,8 +1684,23 @@ const domainAnalysisSummarySelect = {
   tld: true,
   source: true,
   fetchedAt: true,
+  importedAt: true,
   expiresAt: true,
+  labelLength: true,
+  totalScore: true,
+  verdict: true,
   status: true,
+  analysisStepCount: true,
+  subAnalysisCount: true,
+  completedSubAnalysisIds: true,
+  hasStructure: true,
+  hasLexical: true,
+  hasBrand: true,
+  hasMarket: true,
+  hasRisk: true,
+  hasSalability: true,
+  hasSeo: true,
+  hasHistory: true,
   aiSummary: true,
   estimatedValueMin: true,
   estimatedValueMax: true,
@@ -1422,19 +1709,30 @@ const domainAnalysisSummarySelect = {
 } as const;
 
 let domainSummaryCache: { expiresAt: number; domains: DomainAnalysis[] } | null = null;
+let domainSummaryCachePromise: Promise<DomainAnalysis[]> | null = null;
+let queueMetaCache: { expiresAt: number; meta: QueuePageMeta } | null = null;
 
 function clearDomainSummaryCache() {
   domainSummaryCache = null;
+  domainSummaryCachePromise = null;
+  queueMetaCache = null;
 }
 
 async function getPrismaDomainSummaries() {
   const now = Date.now();
   if (domainSummaryCache && domainSummaryCache.expiresAt > now) return domainSummaryCache.domains;
+  if (domainSummaryCachePromise) return domainSummaryCachePromise;
 
-  const dbRows = await prisma.snapTldDomainAnalysis.findMany({ select: domainAnalysisSummarySelect });
-  const domains = dbRows.map((row) => mapPrismaDomainAnalysisSummary(row, { expandLegacySubAnalyses: false }));
-  domainSummaryCache = { expiresAt: now + 5_000, domains };
-  return domains;
+  domainSummaryCachePromise = prisma.snapTldDomainAnalysis.findMany({ select: domainAnalysisSummarySelect })
+    .then((dbRows) => {
+      const domains = dbRows.map((row) => mapPrismaDomainAnalysisSummary(row, { expandLegacySubAnalyses: false }));
+      domainSummaryCache = { expiresAt: Date.now() + 5_000, domains };
+      return domains;
+    })
+    .finally(() => {
+      domainSummaryCachePromise = null;
+    });
+  return domainSummaryCachePromise;
 }
 
 async function runFeeds(repository: Pick<SnapTldRepository, "listFeeds" | "importDomains">, feedIds?: string[]): Promise<RunFeedsResult> {
@@ -1505,9 +1803,18 @@ function buildOverviewSeries(
 
 function normalizeAnalyzeQueueInput(input: AnalyzeQueueInput) {
   const steps = input.steps.length > 0 ? input.steps : (["overview"] as AnalysisStep[]);
+  const selectedSubAnalyses = analysisStepOrder.reduce<Partial<Record<AnalysisCategory, string[]>>>((acc, category) => {
+    const validIds = new Set(categorySubAnalysisSpecs[category].map((spec) => spec.id));
+    const selected = input.selectedSubAnalyses?.[category];
+    if (Array.isArray(selected)) {
+      acc[category] = selected.filter((id) => validIds.has(id));
+    }
+    return acc;
+  }, {});
   return {
     ...input,
     steps,
+    selectedSubAnalyses,
     scope: input.scope ?? "queued",
     sortBy: input.sortBy ?? "oldest-imported",
   };
@@ -1614,6 +1921,42 @@ class PrismaSnapTldRepository implements SnapTldRepository {
   }
 
   async listDomainPage(query: DomainPageQuery = {}) {
+    if (canUseFastDomainPage(query)) {
+      const page = normalizePage(query.page);
+      const pageSize = normalizePageSize(query.pageSize, 50, 1000);
+      const where = buildPrismaDomainWhere(query);
+      const [total, dbRows, meta] = await Promise.all([
+        prisma.snapTldDomainAnalysis.count({ where }),
+        prisma.snapTldDomainAnalysis.findMany({
+          where,
+          orderBy: buildPrismaDomainOrderBy(query),
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: domainAnalysisSummarySelect,
+        }),
+        getPrismaQueueMeta(),
+      ]);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const clampedPage = Math.min(page, totalPages);
+      const items = clampedPage === page
+        ? dbRows
+        : await prisma.snapTldDomainAnalysis.findMany({
+            where,
+            orderBy: buildPrismaDomainOrderBy(query),
+            skip: (clampedPage - 1) * pageSize,
+            take: pageSize,
+            select: domainAnalysisSummarySelect,
+          });
+      return {
+        items: items.map((row) => compactDomainAnalysis(mapPrismaDomainAnalysisSummary(row, { expandLegacySubAnalyses: false }))),
+        total,
+        page: clampedPage,
+        pageSize,
+        totalPages,
+        meta,
+      };
+    }
+
     const domains = await this.listDomains();
     const page = paginate(sortDomains(filterDomains(domains, query), query.sortKey, query.sortDir), query.page, query.pageSize, 1000);
     return {
@@ -1726,31 +2069,28 @@ class PrismaSnapTldRepository implements SnapTldRepository {
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    const [totalDomains, importedToday, domains] = await Promise.all([
+    const [totalDomains, importedToday, total, analyzedToday, excellent, good, mediocre, skip, avgScore] = await Promise.all([
       prisma.snapTldImportedDomain.count(),
       prisma.snapTldImportedDomain.count({ where: { importedAt: { gte: start, lt: end } } }),
-      getPrismaDomainSummaries(),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed" } }),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed", updatedAt: { gte: start, lt: end } } }),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed", verdict: "excellent" } }),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed", verdict: "good" } }),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed", verdict: "mediocre" } }),
+      prisma.snapTldDomainAnalysis.count({ where: { status: "analyzed", verdict: "skip" } }),
+      prisma.snapTldDomainAnalysis.aggregate({ where: { status: "analyzed" }, _avg: { totalScore: true } }),
     ]);
-    const updatedRows = await prisma.snapTldDomainAnalysis.findMany({
-      where: { status: "analyzed", updatedAt: { gte: start, lt: end } },
-      select: { slug: true },
-    });
-    const updatedToday = new Set(updatedRows.map((row) => row.slug));
-    const analyzedDomains = domains.filter((domain) => domain.status === "analyzed");
 
     return {
-      total: analyzedDomains.length,
+      total,
       totalDomains,
       importedToday,
-      analyzedToday: analyzedDomains.filter((domain) => updatedToday.has(domain.slug)).length,
-      excellent: analyzedDomains.filter((domain) => domain.verdict === "excellent").length,
-      good: analyzedDomains.filter((domain) => domain.verdict === "good").length,
-      mediocre: analyzedDomains.filter((domain) => domain.verdict === "mediocre").length,
-      skip: analyzedDomains.filter((domain) => domain.verdict === "skip").length,
-      avg:
-        analyzedDomains.length > 0
-          ? Math.round(analyzedDomains.reduce((sum, domain) => sum + rankingScore(domain), 0) / analyzedDomains.length)
-          : 0,
+      analyzedToday,
+      excellent,
+      good,
+      mediocre,
+      skip,
+      avg: Math.round(avgScore._avg.totalScore ?? 0),
     };
   }
 
@@ -1758,25 +2098,18 @@ class PrismaSnapTldRepository implements SnapTldRepository {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 7);
     cutoff.setHours(0, 0, 0, 0);
-    const [domains, analysisRows, importedRows] = await Promise.all([
-      getPrismaDomainSummaries(),
+    const [analysisRows, importedRows] = await Promise.all([
       prisma.snapTldDomainAnalysis.findMany({
         where: { status: "analyzed" },
-        select: { slug: true, updatedAt: true },
+        select: { totalScore: true, updatedAt: true },
       }),
       prisma.snapTldImportedDomain.findMany({
         where: { importedAt: { gte: cutoff } },
         select: { importedAt: true },
       }),
     ]);
-    const bySlug = new Map(domains.map((domain) => [domain.slug, domain] as const));
     return buildOverviewSeries(
-      analysisRows
-        .map((row) => {
-          const domain = bySlug.get(row.slug);
-          return domain ? { totalScore: rankingScore(domain), updatedAt: row.updatedAt } : null;
-        })
-        .filter((row): row is { totalScore: number; updatedAt: Date } => Boolean(row)),
+      analysisRows.map((row) => ({ totalScore: row.totalScore, updatedAt: row.updatedAt })),
       importedRows,
     );
   }
@@ -1988,7 +2321,9 @@ class PrismaSnapTldRepository implements SnapTldRepository {
             tld: analysis.tld,
             source: analysis.source,
             fetchedAt: parseLooseDateTime(analysis.fetchedAt),
+            importedAt: parseLooseDateTime(analysis.importedAt ?? importedDomainRecords.find((entry) => entry.slug === analysis.slug)?.importedAt ?? analysis.fetchedAt),
             expiresAt: analysis.expiresAt,
+            ...buildDomainAnalysisIndex(analysis),
             totalScore: analysis.totalScore,
             verdict: analysis.verdict,
             status: analysis.status,
@@ -2002,7 +2337,9 @@ class PrismaSnapTldRepository implements SnapTldRepository {
           },
           update: {
             fetchedAt: parseLooseDateTime(analysis.fetchedAt),
+            importedAt: parseLooseDateTime(analysis.importedAt ?? importedDomainRecords.find((entry) => entry.slug === analysis.slug)?.importedAt ?? analysis.fetchedAt),
             expiresAt: analysis.expiresAt,
+            ...buildDomainAnalysisIndex(analysis),
             totalScore: analysis.totalScore,
             verdict: analysis.verdict,
             status: analysis.status,
@@ -2042,7 +2379,9 @@ class PrismaSnapTldRepository implements SnapTldRepository {
         tld: next.tld,
         source: next.source,
         fetchedAt: parseLooseDateTime(next.fetchedAt),
+        importedAt: parseLooseDateTime(next.importedAt ?? next.fetchedAt),
         expiresAt: next.expiresAt,
+        ...buildDomainAnalysisIndex(next),
         totalScore: next.totalScore,
         verdict: next.verdict,
         status: next.status,
@@ -2056,7 +2395,9 @@ class PrismaSnapTldRepository implements SnapTldRepository {
       },
       update: {
         fetchedAt: parseLooseDateTime(next.fetchedAt),
+        importedAt: parseLooseDateTime(next.importedAt ?? next.fetchedAt),
         expiresAt: next.expiresAt,
+        ...buildDomainAnalysisIndex(next),
         totalScore: next.totalScore,
         verdict: next.verdict,
         status: next.status,
@@ -2110,9 +2451,12 @@ class PrismaSnapTldRepository implements SnapTldRepository {
     const options = normalizeAnalyzeQueueInput(input);
     const userState = await this.getUserState();
     const config = buildAnalysisConfig(userState.activeWeightsYaml);
+    const selectedSlugFilter = options.scope === "selected" && (options.slugs?.length ?? 0) > 0
+      ? { slug: { in: options.slugs } }
+      : undefined;
     const [analysisRows, importedRows] = await Promise.all([
-      prisma.snapTldDomainAnalysis.findMany(),
-      prisma.snapTldImportedDomain.findMany({ select: { slug: true, importedAt: true } }),
+      prisma.snapTldDomainAnalysis.findMany({ where: selectedSlugFilter }),
+      prisma.snapTldImportedDomain.findMany({ where: selectedSlugFilter, select: { slug: true, importedAt: true } }),
     ]);
     const importedBySlug = new Map(importedRows.map((row) => [row.slug, row.importedAt.toISOString()] as const));
     const candidates = analysisRows
@@ -2142,7 +2486,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
       };
     }
 
-    const analyzed = await analyzeDomainsAsync(limited, options.steps, config, userState.settings);
+    const analyzed = await analyzeDomainsAsync(limited, options.steps, config, userState.settings, options.selectedSubAnalyses);
 
     await prisma.$transaction([
       ...analyzed.map((domain) =>
@@ -2150,6 +2494,7 @@ class PrismaSnapTldRepository implements SnapTldRepository {
           where: { slug: domain.slug },
           data: {
             fetchedAt: parseLooseDateTime(domain.fetchedAt),
+            ...buildDomainAnalysisIndex(domain),
             totalScore: domain.totalScore,
             verdict: domain.verdict,
             status: domain.status,

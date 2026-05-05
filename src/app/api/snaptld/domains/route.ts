@@ -18,6 +18,8 @@ export async function GET(request: Request) {
   const maxScore = readNumberParam(url, "smax");
   const minDaysUntilExpiry = readNumberParam(url, "emin");
   const maxDaysUntilExpiry = readNumberParam(url, "emax") ?? readNumberParam(url, "expiry");
+  const importedAfter = url.searchParams.get("iafter");
+  const importedBefore = url.searchParams.get("ibefore");
   const minDomainLength = readNumberParam(url, "lmin");
   const maxDomainLength = readNumberParam(url, "lmax");
   const minValue = readNumberParam(url, "vmin");
@@ -35,6 +37,8 @@ export async function GET(request: Request) {
     maxScore: maxScore !== undefined && maxScore > 0 ? maxScore : undefined,
     minDaysUntilExpiry: minDaysUntilExpiry !== undefined && minDaysUntilExpiry >= 0 ? minDaysUntilExpiry : undefined,
     maxDaysUntilExpiry: maxDaysUntilExpiry !== undefined && maxDaysUntilExpiry >= 0 ? maxDaysUntilExpiry : undefined,
+    importedAfter: importedAfter && /^\d{4}-\d{2}-\d{2}$/.test(importedAfter) ? importedAfter : undefined,
+    importedBefore: importedBefore && /^\d{4}-\d{2}-\d{2}$/.test(importedBefore) ? importedBefore : undefined,
     domainLength: (url.searchParams.get("len") as "short" | "medium" | "long" | "all" | null) ?? "all",
     minDomainLength: minDomainLength !== undefined && minDomainLength > 0 ? minDomainLength : undefined,
     maxDomainLength: maxDomainLength !== undefined && maxDomainLength > 0 ? maxDomainLength : undefined,
@@ -42,7 +46,9 @@ export async function GET(request: Request) {
     maxValue: maxValue !== undefined && maxValue > 0 ? maxValue : undefined,
     analysisStepMode: (url.searchParams.get("amode") as "all" | "none" | "complete" | "has" | "missing" | null) ?? "all",
     analysisStep: (url.searchParams.get("astep") as AnalysisCategory | null) ?? null,
-    sortKey: (url.searchParams.get("sort") as "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | null) ?? "score",
+    subAnalysisMode: (url.searchParams.get("samode") as "all" | "has" | "missing" | null) ?? "all",
+    subAnalysisId: url.searchParams.get("sasub") ?? null,
+    sortKey: (url.searchParams.get("sort") as "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | "subanalysis" | "imported" | null) ?? "score",
     sortDir: (url.searchParams.get("dir") as "asc" | "desc" | null) ?? "desc",
   }));
 }

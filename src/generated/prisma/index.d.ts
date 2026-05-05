@@ -6449,13 +6449,19 @@ export namespace Prisma {
   }
 
   export type SnapTldDomainAnalysisAvgAggregateOutputType = {
+    labelLength: number | null
     totalScore: number | null
+    analysisStepCount: number | null
+    subAnalysisCount: number | null
     estimatedValueMin: number | null
     estimatedValueMax: number | null
   }
 
   export type SnapTldDomainAnalysisSumAggregateOutputType = {
+    labelLength: number | null
     totalScore: number | null
+    analysisStepCount: number | null
+    subAnalysisCount: number | null
     estimatedValueMin: number | null
     estimatedValueMax: number | null
   }
@@ -6466,10 +6472,23 @@ export namespace Prisma {
     tld: string | null
     source: string | null
     fetchedAt: Date | null
+    importedAt: Date | null
     expiresAt: string | null
+    labelLength: number | null
     totalScore: number | null
     verdict: string | null
     status: string | null
+    analysisStepCount: number | null
+    subAnalysisCount: number | null
+    completedSubAnalysisIds: string | null
+    hasStructure: boolean | null
+    hasLexical: boolean | null
+    hasBrand: boolean | null
+    hasMarket: boolean | null
+    hasRisk: boolean | null
+    hasSalability: boolean | null
+    hasSeo: boolean | null
+    hasHistory: boolean | null
     aiSummary: string | null
     estimatedValueMin: number | null
     estimatedValueMax: number | null
@@ -6487,10 +6506,23 @@ export namespace Prisma {
     tld: string | null
     source: string | null
     fetchedAt: Date | null
+    importedAt: Date | null
     expiresAt: string | null
+    labelLength: number | null
     totalScore: number | null
     verdict: string | null
     status: string | null
+    analysisStepCount: number | null
+    subAnalysisCount: number | null
+    completedSubAnalysisIds: string | null
+    hasStructure: boolean | null
+    hasLexical: boolean | null
+    hasBrand: boolean | null
+    hasMarket: boolean | null
+    hasRisk: boolean | null
+    hasSalability: boolean | null
+    hasSeo: boolean | null
+    hasHistory: boolean | null
     aiSummary: string | null
     estimatedValueMin: number | null
     estimatedValueMax: number | null
@@ -6508,10 +6540,23 @@ export namespace Prisma {
     tld: number
     source: number
     fetchedAt: number
+    importedAt: number
     expiresAt: number
+    labelLength: number
     totalScore: number
     verdict: number
     status: number
+    analysisStepCount: number
+    subAnalysisCount: number
+    completedSubAnalysisIds: number
+    hasStructure: number
+    hasLexical: number
+    hasBrand: number
+    hasMarket: number
+    hasRisk: number
+    hasSalability: number
+    hasSeo: number
+    hasHistory: number
     aiSummary: number
     estimatedValueMin: number
     estimatedValueMax: number
@@ -6526,13 +6571,19 @@ export namespace Prisma {
 
 
   export type SnapTldDomainAnalysisAvgAggregateInputType = {
+    labelLength?: true
     totalScore?: true
+    analysisStepCount?: true
+    subAnalysisCount?: true
     estimatedValueMin?: true
     estimatedValueMax?: true
   }
 
   export type SnapTldDomainAnalysisSumAggregateInputType = {
+    labelLength?: true
     totalScore?: true
+    analysisStepCount?: true
+    subAnalysisCount?: true
     estimatedValueMin?: true
     estimatedValueMax?: true
   }
@@ -6543,10 +6594,23 @@ export namespace Prisma {
     tld?: true
     source?: true
     fetchedAt?: true
+    importedAt?: true
     expiresAt?: true
+    labelLength?: true
     totalScore?: true
     verdict?: true
     status?: true
+    analysisStepCount?: true
+    subAnalysisCount?: true
+    completedSubAnalysisIds?: true
+    hasStructure?: true
+    hasLexical?: true
+    hasBrand?: true
+    hasMarket?: true
+    hasRisk?: true
+    hasSalability?: true
+    hasSeo?: true
+    hasHistory?: true
     aiSummary?: true
     estimatedValueMin?: true
     estimatedValueMax?: true
@@ -6564,10 +6628,23 @@ export namespace Prisma {
     tld?: true
     source?: true
     fetchedAt?: true
+    importedAt?: true
     expiresAt?: true
+    labelLength?: true
     totalScore?: true
     verdict?: true
     status?: true
+    analysisStepCount?: true
+    subAnalysisCount?: true
+    completedSubAnalysisIds?: true
+    hasStructure?: true
+    hasLexical?: true
+    hasBrand?: true
+    hasMarket?: true
+    hasRisk?: true
+    hasSalability?: true
+    hasSeo?: true
+    hasHistory?: true
     aiSummary?: true
     estimatedValueMin?: true
     estimatedValueMax?: true
@@ -6585,10 +6662,23 @@ export namespace Prisma {
     tld?: true
     source?: true
     fetchedAt?: true
+    importedAt?: true
     expiresAt?: true
+    labelLength?: true
     totalScore?: true
     verdict?: true
     status?: true
+    analysisStepCount?: true
+    subAnalysisCount?: true
+    completedSubAnalysisIds?: true
+    hasStructure?: true
+    hasLexical?: true
+    hasBrand?: true
+    hasMarket?: true
+    hasRisk?: true
+    hasSalability?: true
+    hasSeo?: true
+    hasHistory?: true
     aiSummary?: true
     estimatedValueMin?: true
     estimatedValueMax?: true
@@ -6693,10 +6783,23 @@ export namespace Prisma {
     tld: string
     source: string
     fetchedAt: Date
+    importedAt: Date
     expiresAt: string
+    labelLength: number
     totalScore: number
     verdict: string
     status: string
+    analysisStepCount: number
+    subAnalysisCount: number
+    completedSubAnalysisIds: string
+    hasStructure: boolean
+    hasLexical: boolean
+    hasBrand: boolean
+    hasMarket: boolean
+    hasRisk: boolean
+    hasSalability: boolean
+    hasSeo: boolean
+    hasHistory: boolean
     aiSummary: string
     estimatedValueMin: number
     estimatedValueMax: number
@@ -6733,10 +6836,23 @@ export namespace Prisma {
     tld?: boolean
     source?: boolean
     fetchedAt?: boolean
+    importedAt?: boolean
     expiresAt?: boolean
+    labelLength?: boolean
     totalScore?: boolean
     verdict?: boolean
     status?: boolean
+    analysisStepCount?: boolean
+    subAnalysisCount?: boolean
+    completedSubAnalysisIds?: boolean
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary?: boolean
     estimatedValueMin?: boolean
     estimatedValueMax?: boolean
@@ -6754,10 +6870,23 @@ export namespace Prisma {
     tld?: boolean
     source?: boolean
     fetchedAt?: boolean
+    importedAt?: boolean
     expiresAt?: boolean
+    labelLength?: boolean
     totalScore?: boolean
     verdict?: boolean
     status?: boolean
+    analysisStepCount?: boolean
+    subAnalysisCount?: boolean
+    completedSubAnalysisIds?: boolean
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary?: boolean
     estimatedValueMin?: boolean
     estimatedValueMax?: boolean
@@ -6775,10 +6904,23 @@ export namespace Prisma {
     tld?: boolean
     source?: boolean
     fetchedAt?: boolean
+    importedAt?: boolean
     expiresAt?: boolean
+    labelLength?: boolean
     totalScore?: boolean
     verdict?: boolean
     status?: boolean
+    analysisStepCount?: boolean
+    subAnalysisCount?: boolean
+    completedSubAnalysisIds?: boolean
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary?: boolean
     estimatedValueMin?: boolean
     estimatedValueMax?: boolean
@@ -6796,10 +6938,23 @@ export namespace Prisma {
     tld?: boolean
     source?: boolean
     fetchedAt?: boolean
+    importedAt?: boolean
     expiresAt?: boolean
+    labelLength?: boolean
     totalScore?: boolean
     verdict?: boolean
     status?: boolean
+    analysisStepCount?: boolean
+    subAnalysisCount?: boolean
+    completedSubAnalysisIds?: boolean
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary?: boolean
     estimatedValueMin?: boolean
     estimatedValueMax?: boolean
@@ -6811,7 +6966,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type SnapTldDomainAnalysisOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"slug" | "domain" | "tld" | "source" | "fetchedAt" | "expiresAt" | "totalScore" | "verdict" | "status" | "aiSummary" | "estimatedValueMin" | "estimatedValueMax" | "estimatedValueCurrency" | "categoriesJson" | "seoJson" | "waybackJson" | "createdAt" | "updatedAt", ExtArgs["result"]["snapTldDomainAnalysis"]>
+  export type SnapTldDomainAnalysisOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"slug" | "domain" | "tld" | "source" | "fetchedAt" | "importedAt" | "expiresAt" | "labelLength" | "totalScore" | "verdict" | "status" | "analysisStepCount" | "subAnalysisCount" | "completedSubAnalysisIds" | "hasStructure" | "hasLexical" | "hasBrand" | "hasMarket" | "hasRisk" | "hasSalability" | "hasSeo" | "hasHistory" | "aiSummary" | "estimatedValueMin" | "estimatedValueMax" | "estimatedValueCurrency" | "categoriesJson" | "seoJson" | "waybackJson" | "createdAt" | "updatedAt", ExtArgs["result"]["snapTldDomainAnalysis"]>
 
   export type $SnapTldDomainAnalysisPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "SnapTldDomainAnalysis"
@@ -6822,10 +6977,23 @@ export namespace Prisma {
       tld: string
       source: string
       fetchedAt: Date
+      importedAt: Date
       expiresAt: string
+      labelLength: number
       totalScore: number
       verdict: string
       status: string
+      analysisStepCount: number
+      subAnalysisCount: number
+      completedSubAnalysisIds: string
+      hasStructure: boolean
+      hasLexical: boolean
+      hasBrand: boolean
+      hasMarket: boolean
+      hasRisk: boolean
+      hasSalability: boolean
+      hasSeo: boolean
+      hasHistory: boolean
       aiSummary: string
       estimatedValueMin: number
       estimatedValueMax: number
@@ -7263,10 +7431,23 @@ export namespace Prisma {
     readonly tld: FieldRef<"SnapTldDomainAnalysis", 'String'>
     readonly source: FieldRef<"SnapTldDomainAnalysis", 'String'>
     readonly fetchedAt: FieldRef<"SnapTldDomainAnalysis", 'DateTime'>
+    readonly importedAt: FieldRef<"SnapTldDomainAnalysis", 'DateTime'>
     readonly expiresAt: FieldRef<"SnapTldDomainAnalysis", 'String'>
+    readonly labelLength: FieldRef<"SnapTldDomainAnalysis", 'Int'>
     readonly totalScore: FieldRef<"SnapTldDomainAnalysis", 'Int'>
     readonly verdict: FieldRef<"SnapTldDomainAnalysis", 'String'>
     readonly status: FieldRef<"SnapTldDomainAnalysis", 'String'>
+    readonly analysisStepCount: FieldRef<"SnapTldDomainAnalysis", 'Int'>
+    readonly subAnalysisCount: FieldRef<"SnapTldDomainAnalysis", 'Int'>
+    readonly completedSubAnalysisIds: FieldRef<"SnapTldDomainAnalysis", 'String'>
+    readonly hasStructure: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasLexical: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasBrand: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasMarket: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasRisk: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasSalability: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasSeo: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
+    readonly hasHistory: FieldRef<"SnapTldDomainAnalysis", 'Boolean'>
     readonly aiSummary: FieldRef<"SnapTldDomainAnalysis", 'String'>
     readonly estimatedValueMin: FieldRef<"SnapTldDomainAnalysis", 'Int'>
     readonly estimatedValueMax: FieldRef<"SnapTldDomainAnalysis", 'Int'>
@@ -17440,10 +17621,23 @@ export namespace Prisma {
     tld: 'tld',
     source: 'source',
     fetchedAt: 'fetchedAt',
+    importedAt: 'importedAt',
     expiresAt: 'expiresAt',
+    labelLength: 'labelLength',
     totalScore: 'totalScore',
     verdict: 'verdict',
     status: 'status',
+    analysisStepCount: 'analysisStepCount',
+    subAnalysisCount: 'subAnalysisCount',
+    completedSubAnalysisIds: 'completedSubAnalysisIds',
+    hasStructure: 'hasStructure',
+    hasLexical: 'hasLexical',
+    hasBrand: 'hasBrand',
+    hasMarket: 'hasMarket',
+    hasRisk: 'hasRisk',
+    hasSalability: 'hasSalability',
+    hasSeo: 'hasSeo',
+    hasHistory: 'hasHistory',
     aiSummary: 'aiSummary',
     estimatedValueMin: 'estimatedValueMin',
     estimatedValueMax: 'estimatedValueMax',
@@ -17988,10 +18182,23 @@ export namespace Prisma {
     tld?: StringFilter<"SnapTldDomainAnalysis"> | string
     source?: StringFilter<"SnapTldDomainAnalysis"> | string
     fetchedAt?: DateTimeFilter<"SnapTldDomainAnalysis"> | Date | string
+    importedAt?: DateTimeFilter<"SnapTldDomainAnalysis"> | Date | string
     expiresAt?: StringFilter<"SnapTldDomainAnalysis"> | string
+    labelLength?: IntFilter<"SnapTldDomainAnalysis"> | number
     totalScore?: IntFilter<"SnapTldDomainAnalysis"> | number
     verdict?: StringFilter<"SnapTldDomainAnalysis"> | string
     status?: StringFilter<"SnapTldDomainAnalysis"> | string
+    analysisStepCount?: IntFilter<"SnapTldDomainAnalysis"> | number
+    subAnalysisCount?: IntFilter<"SnapTldDomainAnalysis"> | number
+    completedSubAnalysisIds?: StringFilter<"SnapTldDomainAnalysis"> | string
+    hasStructure?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasLexical?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasBrand?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasMarket?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasRisk?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSalability?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSeo?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasHistory?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
     aiSummary?: StringFilter<"SnapTldDomainAnalysis"> | string
     estimatedValueMin?: IntFilter<"SnapTldDomainAnalysis"> | number
     estimatedValueMax?: IntFilter<"SnapTldDomainAnalysis"> | number
@@ -18009,10 +18216,23 @@ export namespace Prisma {
     tld?: SortOrder
     source?: SortOrder
     fetchedAt?: SortOrder
+    importedAt?: SortOrder
     expiresAt?: SortOrder
+    labelLength?: SortOrder
     totalScore?: SortOrder
     verdict?: SortOrder
     status?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
+    completedSubAnalysisIds?: SortOrder
+    hasStructure?: SortOrder
+    hasLexical?: SortOrder
+    hasBrand?: SortOrder
+    hasMarket?: SortOrder
+    hasRisk?: SortOrder
+    hasSalability?: SortOrder
+    hasSeo?: SortOrder
+    hasHistory?: SortOrder
     aiSummary?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
@@ -18033,10 +18253,23 @@ export namespace Prisma {
     tld?: StringFilter<"SnapTldDomainAnalysis"> | string
     source?: StringFilter<"SnapTldDomainAnalysis"> | string
     fetchedAt?: DateTimeFilter<"SnapTldDomainAnalysis"> | Date | string
+    importedAt?: DateTimeFilter<"SnapTldDomainAnalysis"> | Date | string
     expiresAt?: StringFilter<"SnapTldDomainAnalysis"> | string
+    labelLength?: IntFilter<"SnapTldDomainAnalysis"> | number
     totalScore?: IntFilter<"SnapTldDomainAnalysis"> | number
     verdict?: StringFilter<"SnapTldDomainAnalysis"> | string
     status?: StringFilter<"SnapTldDomainAnalysis"> | string
+    analysisStepCount?: IntFilter<"SnapTldDomainAnalysis"> | number
+    subAnalysisCount?: IntFilter<"SnapTldDomainAnalysis"> | number
+    completedSubAnalysisIds?: StringFilter<"SnapTldDomainAnalysis"> | string
+    hasStructure?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasLexical?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasBrand?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasMarket?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasRisk?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSalability?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSeo?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
+    hasHistory?: BoolFilter<"SnapTldDomainAnalysis"> | boolean
     aiSummary?: StringFilter<"SnapTldDomainAnalysis"> | string
     estimatedValueMin?: IntFilter<"SnapTldDomainAnalysis"> | number
     estimatedValueMax?: IntFilter<"SnapTldDomainAnalysis"> | number
@@ -18054,10 +18287,23 @@ export namespace Prisma {
     tld?: SortOrder
     source?: SortOrder
     fetchedAt?: SortOrder
+    importedAt?: SortOrder
     expiresAt?: SortOrder
+    labelLength?: SortOrder
     totalScore?: SortOrder
     verdict?: SortOrder
     status?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
+    completedSubAnalysisIds?: SortOrder
+    hasStructure?: SortOrder
+    hasLexical?: SortOrder
+    hasBrand?: SortOrder
+    hasMarket?: SortOrder
+    hasRisk?: SortOrder
+    hasSalability?: SortOrder
+    hasSeo?: SortOrder
+    hasHistory?: SortOrder
     aiSummary?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
@@ -18083,10 +18329,23 @@ export namespace Prisma {
     tld?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
     source?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
     fetchedAt?: DateTimeWithAggregatesFilter<"SnapTldDomainAnalysis"> | Date | string
+    importedAt?: DateTimeWithAggregatesFilter<"SnapTldDomainAnalysis"> | Date | string
     expiresAt?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
+    labelLength?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
     totalScore?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
     verdict?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
     status?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
+    analysisStepCount?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
+    subAnalysisCount?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
+    completedSubAnalysisIds?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
+    hasStructure?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasLexical?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasBrand?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasMarket?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasRisk?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSalability?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasSeo?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
+    hasHistory?: BoolWithAggregatesFilter<"SnapTldDomainAnalysis"> | boolean
     aiSummary?: StringWithAggregatesFilter<"SnapTldDomainAnalysis"> | string
     estimatedValueMin?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
     estimatedValueMax?: IntWithAggregatesFilter<"SnapTldDomainAnalysis"> | number
@@ -19259,10 +19518,23 @@ export namespace Prisma {
     tld: string
     source: string
     fetchedAt: Date | string
+    importedAt?: Date | string
     expiresAt: string
+    labelLength?: number
     totalScore: number
     verdict: string
     status: string
+    analysisStepCount?: number
+    subAnalysisCount?: number
+    completedSubAnalysisIds?: string
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary: string
     estimatedValueMin: number
     estimatedValueMax: number
@@ -19280,10 +19552,23 @@ export namespace Prisma {
     tld: string
     source: string
     fetchedAt: Date | string
+    importedAt?: Date | string
     expiresAt: string
+    labelLength?: number
     totalScore: number
     verdict: string
     status: string
+    analysisStepCount?: number
+    subAnalysisCount?: number
+    completedSubAnalysisIds?: string
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary: string
     estimatedValueMin: number
     estimatedValueMax: number
@@ -19301,10 +19586,23 @@ export namespace Prisma {
     tld?: StringFieldUpdateOperationsInput | string
     source?: StringFieldUpdateOperationsInput | string
     fetchedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    importedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiresAt?: StringFieldUpdateOperationsInput | string
+    labelLength?: IntFieldUpdateOperationsInput | number
     totalScore?: IntFieldUpdateOperationsInput | number
     verdict?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
+    analysisStepCount?: IntFieldUpdateOperationsInput | number
+    subAnalysisCount?: IntFieldUpdateOperationsInput | number
+    completedSubAnalysisIds?: StringFieldUpdateOperationsInput | string
+    hasStructure?: BoolFieldUpdateOperationsInput | boolean
+    hasLexical?: BoolFieldUpdateOperationsInput | boolean
+    hasBrand?: BoolFieldUpdateOperationsInput | boolean
+    hasMarket?: BoolFieldUpdateOperationsInput | boolean
+    hasRisk?: BoolFieldUpdateOperationsInput | boolean
+    hasSalability?: BoolFieldUpdateOperationsInput | boolean
+    hasSeo?: BoolFieldUpdateOperationsInput | boolean
+    hasHistory?: BoolFieldUpdateOperationsInput | boolean
     aiSummary?: StringFieldUpdateOperationsInput | string
     estimatedValueMin?: IntFieldUpdateOperationsInput | number
     estimatedValueMax?: IntFieldUpdateOperationsInput | number
@@ -19322,10 +19620,23 @@ export namespace Prisma {
     tld?: StringFieldUpdateOperationsInput | string
     source?: StringFieldUpdateOperationsInput | string
     fetchedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    importedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiresAt?: StringFieldUpdateOperationsInput | string
+    labelLength?: IntFieldUpdateOperationsInput | number
     totalScore?: IntFieldUpdateOperationsInput | number
     verdict?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
+    analysisStepCount?: IntFieldUpdateOperationsInput | number
+    subAnalysisCount?: IntFieldUpdateOperationsInput | number
+    completedSubAnalysisIds?: StringFieldUpdateOperationsInput | string
+    hasStructure?: BoolFieldUpdateOperationsInput | boolean
+    hasLexical?: BoolFieldUpdateOperationsInput | boolean
+    hasBrand?: BoolFieldUpdateOperationsInput | boolean
+    hasMarket?: BoolFieldUpdateOperationsInput | boolean
+    hasRisk?: BoolFieldUpdateOperationsInput | boolean
+    hasSalability?: BoolFieldUpdateOperationsInput | boolean
+    hasSeo?: BoolFieldUpdateOperationsInput | boolean
+    hasHistory?: BoolFieldUpdateOperationsInput | boolean
     aiSummary?: StringFieldUpdateOperationsInput | string
     estimatedValueMin?: IntFieldUpdateOperationsInput | number
     estimatedValueMax?: IntFieldUpdateOperationsInput | number
@@ -19343,10 +19654,23 @@ export namespace Prisma {
     tld: string
     source: string
     fetchedAt: Date | string
+    importedAt?: Date | string
     expiresAt: string
+    labelLength?: number
     totalScore: number
     verdict: string
     status: string
+    analysisStepCount?: number
+    subAnalysisCount?: number
+    completedSubAnalysisIds?: string
+    hasStructure?: boolean
+    hasLexical?: boolean
+    hasBrand?: boolean
+    hasMarket?: boolean
+    hasRisk?: boolean
+    hasSalability?: boolean
+    hasSeo?: boolean
+    hasHistory?: boolean
     aiSummary: string
     estimatedValueMin: number
     estimatedValueMax: number
@@ -19364,10 +19688,23 @@ export namespace Prisma {
     tld?: StringFieldUpdateOperationsInput | string
     source?: StringFieldUpdateOperationsInput | string
     fetchedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    importedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiresAt?: StringFieldUpdateOperationsInput | string
+    labelLength?: IntFieldUpdateOperationsInput | number
     totalScore?: IntFieldUpdateOperationsInput | number
     verdict?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
+    analysisStepCount?: IntFieldUpdateOperationsInput | number
+    subAnalysisCount?: IntFieldUpdateOperationsInput | number
+    completedSubAnalysisIds?: StringFieldUpdateOperationsInput | string
+    hasStructure?: BoolFieldUpdateOperationsInput | boolean
+    hasLexical?: BoolFieldUpdateOperationsInput | boolean
+    hasBrand?: BoolFieldUpdateOperationsInput | boolean
+    hasMarket?: BoolFieldUpdateOperationsInput | boolean
+    hasRisk?: BoolFieldUpdateOperationsInput | boolean
+    hasSalability?: BoolFieldUpdateOperationsInput | boolean
+    hasSeo?: BoolFieldUpdateOperationsInput | boolean
+    hasHistory?: BoolFieldUpdateOperationsInput | boolean
     aiSummary?: StringFieldUpdateOperationsInput | string
     estimatedValueMin?: IntFieldUpdateOperationsInput | number
     estimatedValueMax?: IntFieldUpdateOperationsInput | number
@@ -19385,10 +19722,23 @@ export namespace Prisma {
     tld?: StringFieldUpdateOperationsInput | string
     source?: StringFieldUpdateOperationsInput | string
     fetchedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    importedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiresAt?: StringFieldUpdateOperationsInput | string
+    labelLength?: IntFieldUpdateOperationsInput | number
     totalScore?: IntFieldUpdateOperationsInput | number
     verdict?: StringFieldUpdateOperationsInput | string
     status?: StringFieldUpdateOperationsInput | string
+    analysisStepCount?: IntFieldUpdateOperationsInput | number
+    subAnalysisCount?: IntFieldUpdateOperationsInput | number
+    completedSubAnalysisIds?: StringFieldUpdateOperationsInput | string
+    hasStructure?: BoolFieldUpdateOperationsInput | boolean
+    hasLexical?: BoolFieldUpdateOperationsInput | boolean
+    hasBrand?: BoolFieldUpdateOperationsInput | boolean
+    hasMarket?: BoolFieldUpdateOperationsInput | boolean
+    hasRisk?: BoolFieldUpdateOperationsInput | boolean
+    hasSalability?: BoolFieldUpdateOperationsInput | boolean
+    hasSeo?: BoolFieldUpdateOperationsInput | boolean
+    hasHistory?: BoolFieldUpdateOperationsInput | boolean
     aiSummary?: StringFieldUpdateOperationsInput | string
     estimatedValueMin?: IntFieldUpdateOperationsInput | number
     estimatedValueMax?: IntFieldUpdateOperationsInput | number
@@ -20627,16 +20977,34 @@ export namespace Prisma {
     estimatedValueMax?: SortOrder
   }
 
+  export type BoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
   export type SnapTldDomainAnalysisCountOrderByAggregateInput = {
     slug?: SortOrder
     domain?: SortOrder
     tld?: SortOrder
     source?: SortOrder
     fetchedAt?: SortOrder
+    importedAt?: SortOrder
     expiresAt?: SortOrder
+    labelLength?: SortOrder
     totalScore?: SortOrder
     verdict?: SortOrder
     status?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
+    completedSubAnalysisIds?: SortOrder
+    hasStructure?: SortOrder
+    hasLexical?: SortOrder
+    hasBrand?: SortOrder
+    hasMarket?: SortOrder
+    hasRisk?: SortOrder
+    hasSalability?: SortOrder
+    hasSeo?: SortOrder
+    hasHistory?: SortOrder
     aiSummary?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
@@ -20649,7 +21017,10 @@ export namespace Prisma {
   }
 
   export type SnapTldDomainAnalysisAvgOrderByAggregateInput = {
+    labelLength?: SortOrder
     totalScore?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
   }
@@ -20660,10 +21031,23 @@ export namespace Prisma {
     tld?: SortOrder
     source?: SortOrder
     fetchedAt?: SortOrder
+    importedAt?: SortOrder
     expiresAt?: SortOrder
+    labelLength?: SortOrder
     totalScore?: SortOrder
     verdict?: SortOrder
     status?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
+    completedSubAnalysisIds?: SortOrder
+    hasStructure?: SortOrder
+    hasLexical?: SortOrder
+    hasBrand?: SortOrder
+    hasMarket?: SortOrder
+    hasRisk?: SortOrder
+    hasSalability?: SortOrder
+    hasSeo?: SortOrder
+    hasHistory?: SortOrder
     aiSummary?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
@@ -20681,10 +21065,23 @@ export namespace Prisma {
     tld?: SortOrder
     source?: SortOrder
     fetchedAt?: SortOrder
+    importedAt?: SortOrder
     expiresAt?: SortOrder
+    labelLength?: SortOrder
     totalScore?: SortOrder
     verdict?: SortOrder
     status?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
+    completedSubAnalysisIds?: SortOrder
+    hasStructure?: SortOrder
+    hasLexical?: SortOrder
+    hasBrand?: SortOrder
+    hasMarket?: SortOrder
+    hasRisk?: SortOrder
+    hasSalability?: SortOrder
+    hasSeo?: SortOrder
+    hasHistory?: SortOrder
     aiSummary?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
@@ -20697,14 +21094,20 @@ export namespace Prisma {
   }
 
   export type SnapTldDomainAnalysisSumOrderByAggregateInput = {
+    labelLength?: SortOrder
     totalScore?: SortOrder
+    analysisStepCount?: SortOrder
+    subAnalysisCount?: SortOrder
     estimatedValueMin?: SortOrder
     estimatedValueMax?: SortOrder
   }
 
-  export type BoolFilter<$PrismaModel = never> = {
+  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
     equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolFilter<$PrismaModel> | boolean
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
   }
 
   export type DriveItemNullableScalarRelationFilter = {
@@ -20810,14 +21213,6 @@ export namespace Prisma {
 
   export type DriveItemSumOrderByAggregateInput = {
     sizeBytes?: SortOrder
-  }
-
-  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedBoolFilter<$PrismaModel>
-    _max?: NestedBoolFilter<$PrismaModel>
   }
 
   export type DriveItemScalarRelationFilter = {
@@ -21315,6 +21710,10 @@ export namespace Prisma {
     divide?: number
   }
 
+  export type BoolFieldUpdateOperationsInput = {
+    set?: boolean
+  }
+
   export type DriveItemCreateNestedOneWithoutChildrenInput = {
     create?: XOR<DriveItemCreateWithoutChildrenInput, DriveItemUncheckedCreateWithoutChildrenInput>
     connectOrCreate?: DriveItemCreateOrConnectWithoutChildrenInput
@@ -21347,10 +21746,6 @@ export namespace Prisma {
     connectOrCreate?: DriveActivityCreateOrConnectWithoutItemInput | DriveActivityCreateOrConnectWithoutItemInput[]
     createMany?: DriveActivityCreateManyItemInputEnvelope
     connect?: DriveActivityWhereUniqueInput | DriveActivityWhereUniqueInput[]
-  }
-
-  export type BoolFieldUpdateOperationsInput = {
-    set?: boolean
   }
 
   export type DriveItemUpdateOneWithoutChildrenNestedInput = {

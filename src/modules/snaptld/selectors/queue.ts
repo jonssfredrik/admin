@@ -2,7 +2,7 @@ import type { DomainAnalysis, Verdict } from "@/modules/snaptld/types";
 import { expiryInfo } from "@/modules/snaptld/lib/urgency";
 import { rankingScore } from "@/modules/snaptld/lib/scoring";
 
-export type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis";
+export type QueueSortKey = "score" | "domain" | "verdict" | "expires" | "source" | "value" | "analysis" | "subanalysis" | "imported";
 export type QueueSortDir = "asc" | "desc";
 
 export interface QueueFilters {
